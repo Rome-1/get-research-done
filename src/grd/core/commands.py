@@ -30,6 +30,7 @@ from grd.core.frontmatter import (
     validate_frontmatter,
 )
 from grd.core.observability import instrument_grd_function
+from grd.core.return_contract import validate_grd_return_markdown
 from grd.core.utils import (
     compare_phase_numbers,
     generate_slug,
@@ -329,9 +330,7 @@ def _require_non_empty_string_list(
     normalized: list[str] = []
     for index, item in enumerate(value):
         if not isinstance(item, str) or not item.strip():
-            raise ValidationError(
-                f"Invalid {field_name} in {summary_path}: entry {index} must be a non-empty string"
-            )
+            raise ValidationError(f"Invalid {field_name} in {summary_path}: entry {index} must be a non-empty string")
         normalized.append(item.strip())
     return normalized
 
@@ -341,9 +340,7 @@ def _extract_key_files(value: object, *, summary_path: str) -> tuple[list[str], 
     if isinstance(value, dict):
         extra_keys = sorted(str(key) for key in value if key not in {"created", "modified"})
         if extra_keys:
-            raise ValidationError(
-                f"Invalid key-files in {summary_path}: unexpected key(s) {', '.join(extra_keys)}"
-            )
+            raise ValidationError(f"Invalid key-files in {summary_path}: unexpected key(s) {', '.join(extra_keys)}")
         created = _require_non_empty_string_list(
             value.get("created"),
             field_name="key-files.created",
@@ -430,9 +427,7 @@ def cmd_summary_extract(
     validation = validate_frontmatter(content, "summary", source_path=full_path)
     if not validation.valid:
         problems = [*validation.missing, *validation.errors]
-        raise ValidationError(
-            f"Invalid summary frontmatter in {summary_path}: {'; '.join(problems)}"
-        )
+        raise ValidationError(f"Invalid summary frontmatter in {summary_path}: {'; '.join(problems)}")
 
     # Extract one-liner: frontmatter first, fall back to body bold text
     one_liner = fm.get("one-liner")
@@ -651,7 +646,9 @@ def cmd_regression_check(cwd: Path, *, phase: str | None = None, quick: bool = F
             key=cmp_to_key(lambda a, b: compare_phase_numbers(a.name, b.name)),
         )
     except FileNotFoundError:
-        return RegressionCheckResult(passed=True, issues=[], phases_checked=0, warning="No completed phases found to check")
+        return RegressionCheckResult(
+            passed=True, issues=[], phases_checked=0, warning="No completed phases found to check"
+        )
 
     layout = ProjectLayout(cwd)
     completed_dirs: list[Path] = []
@@ -663,10 +660,14 @@ def cmd_regression_check(cwd: Path, *, phase: str | None = None, quick: bool = F
             completed_dirs.append(d)
 
     if not completed_dirs:
-        return RegressionCheckResult(passed=True, issues=[], phases_checked=0, warning="No completed phases found to check")
+        return RegressionCheckResult(
+            passed=True, issues=[], phases_checked=0, warning="No completed phases found to check"
+        )
     completed_dirs = [d for d in completed_dirs if _matches_phase_scope(d.name, phase)]
     if not completed_dirs:
-        return RegressionCheckResult(passed=True, issues=[], phases_checked=0, warning="No completed phases found to check")
+        return RegressionCheckResult(
+            passed=True, issues=[], phases_checked=0, warning="No completed phases found to check"
+        )
 
     if quick and len(completed_dirs) > 2:
         completed_dirs = completed_dirs[-2:]
@@ -780,89 +781,13 @@ def cmd_regression_check(cwd: Path, *, phase: str | None = None, quick: bool = F
     return RegressionCheckResult(passed=passed, issues=issues, phases_checked=len(completed_dirs))
 
 
-_GRD_RETURN_BLOCK_RE = re.compile(r"```ya?ml\s*\n(grd_return:\s*\n[\s\S]*?)```")
-_GRD_RETURN_FIELD_RE = re.compile(r"^\s{2,4}(\w+):\s*(.+)")
-_GRD_RETURN_LIST_START_RE = re.compile(r"^\s{2,4}(\w+):\s*$")
-_GRD_RETURN_LIST_ITEM_RE = re.compile(r"^\s{4,}-\s*(.+)")
-
-
-def _strip_wrapping_quotes(value: str) -> str:
-    stripped = value.strip()
-    if len(stripped) >= 2 and stripped[0] == stripped[-1] and stripped[0] in {'"', "'"}:
-        return stripped[1:-1]
-    return stripped
-
-
-def _parse_inline_yaml_list(value: str) -> list[str]:
-    stripped = value.strip()
-    if not (stripped.startswith("[") and stripped.endswith("]")):
-        return []
-    inner = stripped[1:-1].strip()
-    if not inner:
-        return []
-
-    lexer = shlex.shlex(inner, posix=True)
-    lexer.whitespace = ","
-    lexer.whitespace_split = True
-    lexer.commenters = ""
-    return [_strip_wrapping_quotes(token) for token in lexer if _strip_wrapping_quotes(token)]
-
-
-def _parse_grd_return_fields(yaml_block: str) -> dict[str, object]:
-    fields: dict[str, object] = {}
-    active_list_key: str | None = None
-
-    for line in yaml_block.split("\n"):
-        if not line.strip() or line.strip() == "grd_return:":
-            if not line.strip():
-                active_list_key = None
-            continue
-
-        list_start = _GRD_RETURN_LIST_START_RE.match(line)
-        if list_start:
-            active_list_key = list_start.group(1).strip()
-            fields[active_list_key] = []
-            continue
-
-        kv = _GRD_RETURN_FIELD_RE.match(line)
-        if kv:
-            active_list_key = None
-            key = kv.group(1).strip()
-            raw_value = kv.group(2).strip()
-            if raw_value.startswith("[") and raw_value.endswith("]"):
-                fields[key] = _parse_inline_yaml_list(raw_value)
-            else:
-                fields[key] = _strip_wrapping_quotes(raw_value)
-            continue
-
-        if active_list_key is not None:
-            list_item = _GRD_RETURN_LIST_ITEM_RE.match(line)
-            if list_item:
-                value = _strip_wrapping_quotes(list_item.group(1).strip())
-                if value:
-                    current = fields.get(active_list_key)
-                    if isinstance(current, list):
-                        current.append(value)
-                continue
-            if line.strip():
-                active_list_key = None
-
-    return fields
-
-
-def _field_present(value: object) -> bool:
-    if value is None:
-        return False
-    if isinstance(value, str):
-        return bool(value.strip())
-    return True
-
-
 @instrument_grd_function("commands.validate_return")
 def cmd_validate_return(file_path: Path) -> ValidateReturnResult:
     """Validate a grd_return YAML block in a file.
 
-    Checks for required fields, valid status values, and numeric task counts.
+    Delegates to the canonical validator in ``return_contract`` so shape rules,
+    required-field checks, nested payload validation, and warning collection
+    stay in one place.
 
     Raises:
         ValidationError: If the file does not exist.
@@ -871,69 +796,12 @@ def cmd_validate_return(file_path: Path) -> ValidateReturnResult:
     if content is None:
         raise ValidationError(f"File not found: {file_path}")
 
-    errors: list[str] = []
-    warnings: list[str] = []
-
-    return_match = _GRD_RETURN_BLOCK_RE.search(content)
-    if not return_match:
-        return ValidateReturnResult(
-            passed=False,
-            errors=["No grd_return YAML block found"],
-            warnings=warnings,
-        )
-
-    yaml_block = return_match.group(1)
-    fields = _parse_grd_return_fields(yaml_block)
-
-    # Check required fields
-    for field in REQUIRED_RETURN_FIELDS:
-        if not _field_present(fields.get(field)):
-            errors.append(f"Missing required field: {field}")
-
-    # Normalize status for comparison (strip whitespace, lowercase)
-    raw_status = fields.get("status", "")
-    status_lower = raw_status.strip().lower() if isinstance(raw_status, str) else ""
-
-    # Validate status value
-    if raw_status and status_lower not in VALID_RETURN_STATUSES:
-        errors.append(
-            f"Invalid status '{raw_status}'. Must be one of: {', '.join(sorted(VALID_RETURN_STATUSES))}"
-        )
-
-    # Validate task counts are numbers
-    for count_field in ("tasks_completed", "tasks_total"):
-        val = fields.get(count_field)
-        if isinstance(val, str):
-            try:
-                int(val)
-            except ValueError:
-                errors.append(f"{count_field} is not a number: '{val}'")
-
-    # Warn if completed but tasks_completed < tasks_total
-    if (
-        status_lower == "completed"
-        and isinstance(fields.get("tasks_completed"), str)
-        and isinstance(fields.get("tasks_total"), str)
-    ):
-        try:
-            done = int(str(fields["tasks_completed"]))
-            total = int(str(fields["tasks_total"]))
-            if done < total:
-                warnings.append(f"Status is 'completed' but tasks_completed ({done}) < tasks_total ({total})")
-        except ValueError:
-            pass
-
-    # Check optional but recommended fields
-    for field in ("duration_seconds",):
-        if not fields.get(field):
-            warnings.append(f"Recommended field missing: {field}")
-
-    passed = len(errors) == 0
+    validation = validate_grd_return_markdown(content)
     return ValidateReturnResult(
         passed=validation.passed,
-        errors=validation.errors,
-        warnings=validation.warnings,
-        fields=validation.fields,
+        errors=list(validation.errors),
+        warnings=list(validation.warnings),
+        fields=dict(validation.fields),
         warning_count=validation.warning_count,
     )
 
@@ -958,4 +826,6 @@ def cmd_apply_return_updates(cwd: Path, file_path: Path) -> ApplyChildReturnResu
     if validation.warnings:
         result.warnings.extend(warning for warning in validation.warnings if warning not in result.warnings)
     return result
+
+
 _MISSING = object()
