@@ -282,6 +282,7 @@ def check(
     timeout_s: float = 30.0,
     use_daemon: bool | None = True,
     auto_spawn: bool = True,
+    max_heartbeats: int | None = None,
 ) -> LeanCheckResult:
     """Type-check inline Lean 4 source.
 
@@ -293,6 +294,10 @@ def check(
     ``auto_spawn`` only matters when ``use_daemon`` is True: if the socket is
     missing, should we try to launch the daemon? Off-by-default callers (e.g.
     tests) can disable this to keep the run hermetic.
+
+    ``max_heartbeats`` overrides Lean's ``maxHeartbeats`` option for this
+    elaboration (``None`` keeps the toolchain default). Used by the
+    heartbeat auto-retry layer.
     """
     imports = imports or []
     if use_daemon and project_root is not None:
@@ -301,6 +306,7 @@ def check(
             code=code,
             imports=list(imports),
             timeout_s=timeout_s,
+            max_heartbeats=max_heartbeats,
         )
         maybe = _run_with_daemon(project_root, req, auto_spawn=auto_spawn)
         if maybe is not None:
@@ -310,6 +316,7 @@ def check(
         code=code,
         imports=list(imports),
         timeout_s=timeout_s,
+        max_heartbeats=max_heartbeats,
     )
 
 
@@ -320,6 +327,7 @@ def check_file(
     timeout_s: float = 30.0,
     use_daemon: bool | None = True,
     auto_spawn: bool = True,
+    max_heartbeats: int | None = None,
 ) -> LeanCheckResult:
     """Type-check a ``.lean`` file by absolute path."""
     abs_path = str(Path(path).resolve())
@@ -328,6 +336,7 @@ def check_file(
             op="typecheck_file",
             path=abs_path,
             timeout_s=timeout_s,
+            max_heartbeats=max_heartbeats,
         )
         maybe = _run_with_daemon(project_root, req, auto_spawn=auto_spawn)
         if maybe is not None:
@@ -336,4 +345,5 @@ def check_file(
     return lean_backend.run_check(
         path=abs_path,
         timeout_s=timeout_s,
+        max_heartbeats=max_heartbeats,
     )

@@ -160,6 +160,7 @@ def run_check(
     timeout_s: float = 30.0,
     lean_path: str | None = None,
     cwd: Path | None = None,
+    max_heartbeats: int | None = None,
 ) -> LeanCheckResult:
     """Type-check a Lean source (inline or file) via a one-shot subprocess.
 
@@ -218,9 +219,17 @@ def run_check(
     error_kind = None
     error_detail: str | None = None
 
+    argv: list[str] = [binary]
+    if max_heartbeats is not None:
+        # Lean's CLI accepts '-Dname=value' to set any set_option key. Using
+        # it avoids rewriting the source and works for both inline and file
+        # inputs without a copy.
+        argv.append(f"-DmaxHeartbeats={max_heartbeats}")
+    argv.append(target_path)
+
     try:
         proc = subprocess.run(
-            [binary, target_path],
+            argv,
             capture_output=True,
             text=True,
             timeout=timeout_s,

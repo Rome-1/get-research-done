@@ -363,3 +363,129 @@ def test_check_no_input_exits_with_input_error(tmp_path: Path) -> None:
         input="",
     )
     assert result.exit_code == EXIT_INPUT_ERROR
+
+
+def test_check_help_documents_heartbeat_flags(monkeypatch: pytest.MonkeyPatch) -> None:
+    """--max-heartbeat-retries / --initial-heartbeats must be discoverable (ge-l9cz)."""
+    # Widen the help-output terminal so typer doesn't text-wrap the flag name
+    # across column boundaries and hide the substring we're asserting on.
+    monkeypatch.setenv("COLUMNS", "200")
+    monkeypatch.setenv("TERMINAL_WIDTH", "200")
+    result = runner.invoke(app, ["lean", "check", "--help"], terminal_width=200)
+    assert result.exit_code == 0
+    assert "max-heartbeat-retries" in result.stdout
+    assert "initial-heartbeats" in result.stdout
+
+
+def test_prove_help_documents_heartbeat_flags(monkeypatch: pytest.MonkeyPatch) -> None:
+    monkeypatch.setenv("COLUMNS", "200")
+    monkeypatch.setenv("TERMINAL_WIDTH", "200")
+    result = runner.invoke(app, ["lean", "prove", "--help"], terminal_width=200)
+    assert result.exit_code == 0
+    assert "max-heartbeat-retries" in result.stdout
+    assert "initial-heartbeats" in result.stdout
+
+
+def _retry_stub_bin(
+    tmp_path: Path, *, counter: Path, first_exit: int, later_exit: int, stderr: str
+) -> Path:
+    """Create a lean stub bin_dir and return it.
+
+    ``counter`` is an on-disk file updated by the stub on each call; the
+    test reads it to confirm the retry layer fired. Uses ``awk`` via
+    the shared PATH to avoid dragging ``cat`` into a hand-rolled stub
+    PATH.
+    """
+    bin_dir = tmp_path / "bin"
+    bin_dir.mkdir()
+    script = bin_dir / "lean"
+    # Absolute path to /bin/cat is hermetic — avoids PATH manipulation
+    # issues when callers prepend bin_dir.
+    script.write_text(
+        "#!/bin/bash\n"
+        f"n=$(/bin/cat {counter})\n"
+        f"echo $((n+1)) > {counter}\n"
+        "if [ \"$n\" = \"0\" ]; then\n"
+        f"  echo '{stderr}' >&2\n"
+        f"  exit {first_exit}\n"
+        "fi\n"
+        f"exit {later_exit}\n",
+        encoding="utf-8",
+    )
+    script.chmod(script.stat().st_mode | stat.S_IXUSR | stat.S_IXGRP | stat.S_IXOTH)
+    return bin_dir
+
+
+def test_check_retries_on_heartbeat_timeout_and_prints_suggestion(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """End-to-end: baseline times out, retry at 400k succeeds, suggestion lands."""
+    (tmp_path / ".grd").mkdir()
+    counter = tmp_path / "counter"
+    counter.write_text("0", encoding="utf-8")
+
+    bin_dir = _retry_stub_bin(
+        tmp_path,
+        counter=counter,
+        first_exit=1,
+        later_exit=0,
+        stderr=(
+            "stub.lean:1:0: error: (deterministic) timeout at `whnf`, "
+            "maximum number of heartbeats (200000) has been reached"
+        ),
+    )
+    monkeypatch.setenv("PATH", f"{bin_dir}:/usr/bin:/bin")
+
+    result = runner.invoke(
+        app,
+        [
+            "--cwd",
+            str(tmp_path),
+            "lean",
+            "check",
+            "theorem t : 1 = 1 := rfl",
+            "--no-daemon",
+            "--max-heartbeat-retries",
+            "2",
+        ],
+    )
+    assert result.exit_code == 0, result.output
+    assert "Heartbeat auto-retry" in result.output
+    assert "maxHeartbeats=400000" in result.output
+    # Stub was called at least twice: baseline + one retry.
+    assert int(counter.read_text()) >= 2
+
+
+def test_check_no_auto_retry_when_flag_disabled(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """--max-heartbeat-retries 0 preserves one-shot behaviour (no retry)."""
+    (tmp_path / ".grd").mkdir()
+    counter = tmp_path / "counter"
+    counter.write_text("0", encoding="utf-8")
+
+    bin_dir = _retry_stub_bin(
+        tmp_path,
+        counter=counter,
+        first_exit=1,
+        later_exit=1,
+        stderr="stub.lean:1:0: error: maximum number of heartbeats has been reached",
+    )
+    monkeypatch.setenv("PATH", f"{bin_dir}:/usr/bin:/bin")
+
+    result = runner.invoke(
+        app,
+        [
+            "--cwd",
+            str(tmp_path),
+            "lean",
+            "check",
+            "x",
+            "--no-daemon",
+            "--max-heartbeat-retries",
+            "0",
+        ],
+    )
+    assert result.exit_code == EXIT_SOFT_FAIL
+    assert int(counter.read_text()) == 1
+    assert "Heartbeat auto-retry" not in result.output

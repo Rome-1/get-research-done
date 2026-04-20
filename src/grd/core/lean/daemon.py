@@ -120,12 +120,14 @@ def handle_request(
             result = pantograph_backend.run_check(
                 code=req.code,
                 imports=list(req.imports),
+                max_heartbeats=req.max_heartbeats,
             )
         if result is None:
             result = lean_backend.run_check(
                 code=req.code,
                 imports=list(req.imports),
                 timeout_s=req.timeout_s,
+                max_heartbeats=req.max_heartbeats,
             )
     elif req.op == "typecheck_file":
         if req.path is None:
@@ -138,6 +140,7 @@ def handle_request(
         result = lean_backend.run_check(
             path=req.path,
             timeout_s=req.timeout_s,
+            max_heartbeats=req.max_heartbeats,
         )
     else:  # pragma: no cover — guarded by the Literal union on req.op
         return LeanCheckResult(
