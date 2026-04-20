@@ -16,8 +16,13 @@ from jinja2 import BaseLoader, Environment, TemplateNotFound
 from grd.mcp.paper.citations import extract_markdown_citations
 from grd.mcp.paper.filters import all_filter_paths
 from grd.mcp.paper.markdown_support import looks_like_latex, maybe_convert_to_latex
-from grd.mcp.paper.models import Author, FigureRef, PaperConfig, Section
-from grd.utils.latex import clean_latex_fences, fix_bibliography_conflict, sanitize_latex
+from grd.mcp.paper.models import Author, FigureRef, PaperConfig, Section, normalize_acknowledgments
+from grd.utils.latex import (
+    clean_latex_fences,
+    escape_user_text_for_latex,
+    fix_bibliography_conflict,
+    sanitize_latex,
+)
 from grd.utils.pandoc import detect_pandoc
 
 logger = logging.getLogger(__name__)
@@ -100,6 +105,18 @@ def _convert_section_markdown(section: Section, *, lua_filters: list | None, pan
 
 def _clean_figure(figure: FigureRef) -> FigureRef:
     return figure.model_copy(update={"caption": clean_latex_fences(figure.caption)})
+
+
+def _clean_user_text(raw: str) -> str:
+    """Clean and escape a user-provided metadata string for LaTeX.
+
+    Applied to title, abstract, author fields, and acknowledgments — the
+    surfaces where unescaped ``~``, ``#``, ``%``, ``&`` cause compile
+    failures or silent data loss. Section content, figure captions, and
+    appendix content are deliberately *not* routed through here because
+    they may legitimately contain raw LaTeX commands.
+    """
+    return escape_user_text_for_latex(clean_latex_fences(raw))
 
 
 def _audit_markdown_citations_over_sections(
