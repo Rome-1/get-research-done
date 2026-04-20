@@ -48,7 +48,7 @@ from grd.core.constants import (
 from grd.core.contract_validation import _format_schema_error
 from grd.core.errors import GRDError
 from grd.core.observability import instrument_grd_function, resolve_project_root
-from grd.core.utils import matching_phase_artifact_count, phase_artifact_display_name, phase_artifact_id, safe_read_file
+from grd.core.utils import matching_phase_artifact_count, normalize_ascii_slug, phase_artifact_display_name, phase_artifact_id, safe_read_file
 
 # ---------------------------------------------------------------------------
 # Public API
