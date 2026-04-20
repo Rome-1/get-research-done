@@ -28,11 +28,46 @@ from grd.adapters.install_utils import (
     HOOKS_DIR_NAME,
     build_runtime_install_repair_command,
 )
-from grd.core.cli_args import resolve_root_global_cli_cwd_from_argv as _resolve_cli_cwd_from_argv
+from grd.core.cli_args import (
+    resolve_root_global_cli_cwd_from_argv as _resolve_cli_cwd_from_argv,
+)
+from grd.core.cli_args import (
+    validate_root_global_cli_passthrough as _validate_root_global_cli_passthrough,
+)
 from grd.core.constants import ENV_GRD_ACTIVE_RUNTIME, ENV_GRD_DISABLE_CHECKOUT_REEXEC
 from grd.adapters.runtime_catalog import get_shared_install_metadata
 from grd.hooks.install_metadata import load_install_manifest_runtime_status
-from grd.hooks.runtime_detect import normalize_runtime_name
+from grd.hooks.runtime_detect import _manifest_runtime_status, normalize_runtime_name
+
+
+class _BridgeArgumentError(ValueError):
+    """Raised when the runtime bridge arguments are malformed."""
+
+
+class _BridgeFailureKind(StrEnum):
+    """Stable internal failure kinds for runtime bridge rejection paths."""
+
+    MALFORMED_INVOCATION = "malformed_invocation"
+    UNKNOWN_RUNTIME = "unknown_runtime"
+    MISSING_INSTALL_SCOPE = "missing_install_scope"
+    MALFORMED_INSTALL_SCOPE = "malformed_install_scope"
+    MISSING_MANIFEST = "missing_manifest"
+    CORRUPT_MANIFEST = "corrupt_manifest"
+    INVALID_MANIFEST = "invalid_manifest"
+    MISSING_RUNTIME = "missing_runtime"
+    MALFORMED_RUNTIME = "malformed_runtime"
+    RUNTIME_MISMATCH = "runtime_mismatch"
+    INSTALL_SCOPE_MISMATCH = "install_scope_mismatch"
+    MISSING_INSTALL_ARTIFACTS = "missing_install_artifacts"
+
+
+@dataclass(frozen=True, slots=True)
+class _BridgeFailure:
+    """Structured internal representation of a bridge rejection."""
+
+    kind: _BridgeFailureKind
+    message: str
+    exit_code: int = 127
 
 
 def _parse_args(argv: list[str]) -> tuple[argparse.Namespace, list[str]]:

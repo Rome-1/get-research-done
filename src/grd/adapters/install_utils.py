@@ -16,7 +16,11 @@ import sys
 from collections.abc import Callable
 from pathlib import Path, PurePosixPath
 
-from grd.adapters.runtime_catalog import get_runtime_descriptor, resolve_global_config_dir
+from grd.adapters.runtime_catalog import (
+    get_runtime_descriptor,
+    get_shared_install_metadata,
+    resolve_global_config_dir,
+)
 from grd.adapters.tool_names import CONTEXTUAL_TOOL_REFERENCE_NAMES
 from grd.core.constants import HOME_DATA_DIR_NAME
 

@@ -12,7 +12,9 @@ Usage:
 """
 
 import copy
+import logging
 import re
+import sys
 from collections.abc import Callable
 from functools import cache, lru_cache
 from pathlib import Path
@@ -26,7 +28,12 @@ from grd.adapters.tool_names import canonical
 from grd.command_labels import rewrite_runtime_command_surfaces
 from grd.core.errors import GRDError
 from grd.core.observability import grd_span
-from grd.mcp.servers import parse_frontmatter_safe, stable_mcp_error, stable_mcp_response
+from grd.mcp.servers import (
+    parse_frontmatter_safe,
+    stable_mcp_error,
+    stable_mcp_response,
+    tighten_registered_tool_contracts,
+)
 
 logging.basicConfig(stream=sys.stderr, level=logging.INFO, format="%(name)s %(levelname)s: %(message)s")
 logger = logging.getLogger("grd-skills")

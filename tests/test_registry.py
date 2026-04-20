@@ -9,7 +9,6 @@ import pytest
 
 from grd import registry
 from grd.registry import (
-    _DEFAULT_REVIEW_CONTRACTS,
     AgentDef,
     CommandDef,
     SkillDef,

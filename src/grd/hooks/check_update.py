@@ -10,6 +10,7 @@ import time
 from pathlib import Path
 
 from grd.adapters.install_utils import CACHE_DIR_NAME, GRD_INSTALL_DIR_NAME, UPDATE_CACHE_FILENAME
+from grd.adapters.runtime_catalog import get_shared_install_metadata
 from grd.core.constants import ENV_GRD_DEBUG, PLANNING_DIR_NAME
 from grd.hooks.install_metadata import config_dir_has_complete_install
 

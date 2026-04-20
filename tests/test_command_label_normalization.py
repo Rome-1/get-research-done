@@ -6,7 +6,7 @@ import pytest
 
 from grd import registry
 from grd.adapters.runtime_catalog import iter_runtime_descriptors
-from grd.cli import _canonical_command_name
+from grd.cli._helpers import _canonical_command_name
 from grd.command_labels import (
     canonical_command_label,
     canonical_skill_label,

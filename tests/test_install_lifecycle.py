@@ -6,6 +6,7 @@ import json
 from pathlib import Path
 
 import pytest
+from typer.testing import CliRunner
 
 from grd.adapters import get_adapter, iter_runtime_descriptors
 from grd.adapters.install_utils import MANIFEST_NAME, build_runtime_cli_bridge_command, file_hash

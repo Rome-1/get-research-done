@@ -25,6 +25,8 @@ import pytest
 
 from grd import registry
 from grd.adapters import get_adapter
+from grd.adapters.base import RuntimeAdapter
+from grd.adapters.runtime_catalog import iter_runtime_descriptors
 from grd.adapters.install_utils import (
     MANIFEST_NAME,
     expand_at_includes,
@@ -129,6 +131,11 @@ class _NoCommitAttributionProbeAdapter(RuntimeAdapter):
     def runtime_install_required_relpaths(self) -> tuple[str, ...]:
         return ()
 
+_RUNTIME_DESCRIPTORS = iter_runtime_descriptors()
+_ALL_RUNTIMES = tuple(descriptor.runtime_name for descriptor in _RUNTIME_DESCRIPTORS)
+_RUNTIMES_WITH_MANIFEST_FILE_PREFIXES = tuple(
+    descriptor.runtime_name for descriptor in _RUNTIME_DESCRIPTORS if descriptor.manifest_file_prefixes
+)
 _FOREIGN_RUNTIME_BY_RUNTIME = {
     descriptor.runtime_name: _ALL_RUNTIMES[(index + 1) % len(_ALL_RUNTIMES)]
     for index, descriptor in enumerate(_RUNTIME_DESCRIPTORS)

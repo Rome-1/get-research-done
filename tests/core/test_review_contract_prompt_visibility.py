@@ -4,12 +4,24 @@ import dataclasses
 import re
 from pathlib import Path
 
+import pytest
+import yaml
+
 from grd import registry
+from grd.core.model_visible_text import (
+    REVIEW_CONTRACT_FRONTMATTER_KEY,
+    REVIEW_CONTRACT_PROMPT_WRAPPER_KEY,
+)
+from grd.core.review_contract_prompt import (
+    normalize_review_contract_frontmatter_payload,
+    normalize_review_contract_payload,
+)
 
 REPO_ROOT = Path(__file__).resolve().parents[2]
 COMMANDS_DIR = REPO_ROOT / "src/grd/commands"
 REFERENCES_DIR = REPO_ROOT / "src/grd/specs/references"
 TEMPLATES_DIR = REPO_ROOT / "src/grd/specs/templates"
+WORKFLOWS_DIR = REPO_ROOT / "src/grd/specs/workflows"
 
 
 def _manual_model_visible_yaml_section(*, heading: str, note: str, payload: dict[str, object]) -> str:
