@@ -654,6 +654,15 @@ def required_assertion_keys(lock: ConventionLock) -> list[str]:
     return required
 
 
+def _lookup_lock_value(lock: ConventionLock, key: str) -> str | None:
+    """Return the active value for a canonical or custom convention key."""
+    if key in KNOWN_CONVENTIONS:
+        value = getattr(lock, key, None)
+        if value is not None:
+            return str(value)
+    return lock.custom_conventions.get(key)
+
+
 @instrument_grd_function("conventions.validate_assertions")
 def validate_assertions(
     content: str,
