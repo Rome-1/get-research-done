@@ -124,6 +124,13 @@ def search(
     )
 
 
+def _annotate_permissions_payload(payload: dict[str, object]) -> dict[str, object]:
+    """Attach structured capability and evidence metadata to a permissions payload."""
+    from grd.core.health import annotate_permissions_payload
+
+    return annotate_permissions_payload(payload, requested_runtime=None)
+
+
 def entrypoint() -> int | None:
     """Console-script and ``python -m`` entrypoint with checkout preference."""
     _maybe_reexec_from_checkout()

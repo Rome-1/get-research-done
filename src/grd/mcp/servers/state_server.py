@@ -10,6 +10,8 @@ Usage:
     grd-mcp-state
 """
 
+import logging
+import sys
 from pathlib import Path
 from typing import Annotated
 
@@ -27,7 +29,12 @@ from grd.core.state import (
     state_validate,
 )
 from grd.core.utils import is_phase_complete
-from grd.mcp.servers import stable_mcp_error, stable_mcp_response
+from grd.mcp.servers import (
+    ABSOLUTE_PROJECT_DIR_SCHEMA,
+    stable_mcp_error,
+    stable_mcp_response,
+    tighten_registered_tool_contracts,
+)
 
 logging.basicConfig(stream=sys.stderr, level=logging.INFO, format="%(name)s %(levelname)s: %(message)s")
 logger = logging.getLogger("grd-state")

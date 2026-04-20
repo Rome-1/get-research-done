@@ -20,6 +20,7 @@ from types import SimpleNamespace
 
 from grd.adapters import iter_adapters
 from grd.adapters.runtime_catalog import get_shared_install_metadata, iter_runtime_descriptors
+from grd.command_labels import runtime_public_command_prefixes
 
 REPO_ROOT = Path(__file__).resolve().parent.parent
 

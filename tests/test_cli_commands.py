@@ -26,6 +26,7 @@ from grd.adapters import get_adapter
 from grd.adapters.runtime_catalog import iter_runtime_descriptors, list_runtime_names
 from grd.cli import app
 from grd.core.state import default_state_dict, generate_state_markdown
+from tests.manuscript_test_support import CANONICAL_MANUSCRIPT_STEM, manuscript_relpath as canonical_manuscript_relpath
 
 FIXTURES_DIR = Path(__file__).resolve().parent / "fixtures" / "stage0"
 _RUNTIME_DESCRIPTORS = iter_runtime_descriptors()

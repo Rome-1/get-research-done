@@ -645,6 +645,15 @@ def parse_assert_conventions(content: str) -> list[tuple[str, str]]:
     return pairs
 
 
+def required_assertion_keys(lock: ConventionLock) -> list[str]:
+    """Return the active critical convention keys every derivation artifact should assert."""
+    required: list[str] = []
+    for key in _CRITICAL_ASSERTION_KEYS:
+        if not is_bogus_value(getattr(lock, key, None)):
+            required.append(key)
+    return required
+
+
 @instrument_grd_function("conventions.validate_assertions")
 def validate_assertions(
     content: str,

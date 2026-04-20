@@ -8,6 +8,8 @@ import os
 from contextlib import contextmanager
 from pathlib import Path
 
+import pytest
+
 from grd.contracts import ResearchContract
 from grd.core.constants import STATE_JSON_BACKUP_FILENAME, ProjectLayout
 from grd.core.state import (

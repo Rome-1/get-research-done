@@ -771,6 +771,52 @@ def result_deps(state: dict, result_id: str) -> ResultDeps:
     )
 
 
+def result_downstream(state: dict, result_id: str) -> ResultDownstream:
+    """Find all results that depend on the given result, transitively.
+
+    Returns the result, its direct dependents (results whose ``depends_on``
+    includes *result_id*), and transitive dependents (results that depend on
+    those, and so on).
+
+    Raises ResultNotFoundError if result_id is not found.
+    """
+    results, result, by_id = _get_result_registry_context(state, result_id)
+
+    reverse_deps: dict[str, list[str]] = {}
+    for r in results:
+        if not isinstance(r, dict) or not r.get("id"):
+            continue
+        for dep_id in _normalize_dependency_ids(r.get("depends_on", [])):
+            reverse_deps.setdefault(dep_id, []).append(r["id"])
+
+    direct_dependent_ids = list(dict.fromkeys(reverse_deps.get(result_id, [])))
+    direct_dependents = [_result_from_record(by_id[did]) for did in direct_dependent_ids if did in by_id]
+
+    visited: set[str] = {result_id}
+    queue: deque[str] = deque(direct_dependent_ids)
+    transitive_dependents: list[IntermediateResult] = []
+    direct_dep_set = set(direct_dependent_ids)
+
+    while queue:
+        dep_id = queue.popleft()
+        if dep_id in visited:
+            continue
+        visited.add(dep_id)
+
+        if dep_id not in direct_dep_set and dep_id in by_id:
+            transitive_dependents.append(_result_from_record(by_id[dep_id]))
+
+        for downstream_id in reverse_deps.get(dep_id, []):
+            if downstream_id not in visited:
+                queue.append(downstream_id)
+
+    return ResultDownstream(
+        result=_result_from_record(result),
+        direct_dependents=direct_dependents,
+        transitive_dependents=transitive_dependents,
+    )
+
+
 @instrument_grd_function("results.verify")
 def result_verify(
     state: dict,

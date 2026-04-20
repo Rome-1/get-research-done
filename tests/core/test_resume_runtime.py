@@ -3,9 +3,12 @@ from __future__ import annotations
 import json
 from pathlib import Path
 
+import pytest
+
 from grd.core import context as context_module
 from grd.core import state as state_module
 from grd.core.context import init_resume
+from grd.core.resume_surface import RESUME_COMPATIBILITY_ALIAS_FIELDS
 from grd.core.state import parse_state_to_json, state_record_session
 
 
