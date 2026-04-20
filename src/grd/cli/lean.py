@@ -1906,6 +1906,101 @@ def lean_stop_repl() -> None:
         _output(shutdown_daemon(_get_cwd()))
 
 
+@lean_app.command("render-proof")
+def lean_render_proof(
+    file: str = typer.Argument(
+        ...,
+        help="Path to a Lean 4 source file containing one or more theorems.",
+    ),
+    theorem: str | None = typer.Option(
+        None,
+        "--theorem",
+        "-t",
+        help="Render only the named theorem/lemma. Omit to render every declaration in the file.",
+    ),
+    format: str = typer.Option(
+        "markdown",
+        "--format",
+        "-f",
+        help="Output format: markdown (default), latex, or json (structured, narrative strings empty).",
+    ),
+    output: str | None = typer.Option(
+        None,
+        "--output",
+        "-o",
+        help="Write the rendered narrative to this path instead of stdout. Ignored in --raw mode.",
+    ),
+) -> None:
+    """Isar-style narrative rendering of a Lean 4 proof (ge-epra / P3-1).
+
+    Takes a Lean 4 file, finds ``theorem``/``lemma``/``example``/``def``
+    declarations, and emits a Markdown or LaTeX narrative that translates
+    each tactic step into prose (``have X from Y``, ``rewrite using Z``,
+    ``conclude by W``) alongside the original tactic script.
+
+    **Reviewability tool, not a verifier.** No daemon is contacted, no
+    Lean process is spawned, and no kernel check is performed. The narrative
+    is a heuristic gloss intended to help a human skim an AI-generated
+    proof; it is not authoritative. Unrecognized tactics are quoted verbatim
+    so the narrative never silently drops a step.
+
+    SIDE EFFECTS:
+      - Process spawns: none.
+      - Filesystem: reads FILE; writes to --output when provided.
+      - Network: none.
+      - Beads: none.
+      - Dependencies: none.
+      - Audit-safe — read-only (no daemon, no spawn).
+    """
+    from typing import cast
+
+    from grd.core.lean.render_proof import ProofRenderFormat, render_proof
+
+    allowed_formats = ("markdown", "latex", "json")
+    if format not in allowed_formats:
+        _error(
+            f"--format must be one of {', '.join(allowed_formats)}, got {format!r}.",
+            code=EXIT_INPUT_ERROR,
+        )
+    target = Path(file)
+    if not target.is_absolute():
+        target = _get_cwd() / target
+    try:
+        source_text = target.read_text(encoding="utf-8")
+    except FileNotFoundError:
+        _error(f"Lean source file not found: {file}", code=EXIT_INPUT_ERROR)
+    except OSError as exc:
+        _error(f"Failed to read {file}: {exc}", code=EXIT_INPUT_ERROR)
+
+    result = render_proof(
+        source_text,
+        source_path=str(target),
+        theorem=theorem,
+        format=cast(ProofRenderFormat, format),
+    )
+
+    from grd.cli._helpers import _raw
+
+    if _raw:
+        _output(result)
+        return
+    if output:
+        out_path = Path(output)
+        if not out_path.is_absolute():
+            out_path = _get_cwd() / out_path
+        out_path.parent.mkdir(parents=True, exist_ok=True)
+        out_path.write_text(result.combined_narrative, encoding="utf-8")
+        console.print(f"[green]Wrote {len(result.theorems)} theorem rendering(s) to[/] {out_path}")
+        for warning in result.warnings:
+            console.print(f"[yellow]warning:[/] {warning}")
+        return
+    for warning in result.warnings:
+        console.print(f"[yellow]warning:[/] {warning}")
+    if not result.theorems:
+        return
+    console.print(result.combined_narrative)
+
+
 @lean_app.command("ping")
 def lean_ping() -> None:
     """Check whether the daemon is alive on this project's socket.
