@@ -9,7 +9,10 @@
 \usepackage{amssymb}
 \usepackage{wasysym}
 \providecommand{\tightlist}{\setlength{\itemsep}{0pt}\setlength{\parskip}{0pt}}
-% aastex631 provides \citet/\citep via natbib compatibility shims internally.
+% Citation resolution: \citet{key} (textual) and \citep{key} (parenthetical)
+% resolve through natbib, which aastex631 loads internally. We do NOT
+% \usepackage{natbib} here -- doing so on top of the class load triggers
+% "Option clash" errors. \bibliography{...} below feeds bibtex.
 
 \begin{document}
 

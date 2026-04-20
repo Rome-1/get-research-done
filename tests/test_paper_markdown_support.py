@@ -6,10 +6,11 @@ import shutil
 
 import pytest
 
+from grd.mcp.paper import markdown_support
 from grd.mcp.paper.markdown_support import looks_like_latex, maybe_convert_to_latex
 from grd.mcp.paper.models import PaperConfig, Section
 from grd.mcp.paper.template_registry import render_paper
-from grd.utils.pandoc import PandocStatus
+from grd.utils.pandoc import PandocExecutionError, PandocStatus
 
 HAS_PANDOC = shutil.which("pandoc") is not None
 
@@ -30,6 +31,19 @@ HAS_PANDOC = shutil.which("pandoc") is not None
         "Intro paragraph.\n\n\\section{Results}\nMore text.",
         "```latex\nE = mc^2\n```",
         "```tex\n\\frac{a}{b}\n```",
+        # Display-math environments are LaTeX-specific, not markdown.
+        "\\begin{equation}\nE = mc^2\n\\end{equation}",
+        "\\begin{equation*}\nx = y\n\\end{equation*}",
+        "\\begin{align}\na &= b \\\\ c &= d\n\\end{align}",
+        "\\begin{gather}\nx = y\n\\end{gather}",
+        "\\begin{multline}\na + b\n\\end{multline}",
+        "\\begin{eqnarray}\na &=& b\n\\end{eqnarray}",
+        # Other structural commands the broader sigil set should catch.
+        "\\maketitle",
+        "\\bibliography{refs}",
+        "\\usepackage{amsmath}",
+        "\\appendix\n\\section{Proofs}",
+        "\\part{Foundations}",
     ],
 )
 def test_looks_like_latex_detects_structural_commands(content: str) -> None:
@@ -49,6 +63,30 @@ def test_looks_like_latex_detects_structural_commands(content: str) -> None:
 )
 def test_looks_like_latex_rejects_plain_markdown(content: str) -> None:
     assert looks_like_latex(content) is False
+
+
+@pytest.mark.parametrize(
+    "content",
+    [
+        # Bare ``` fence quoting LaTeX must not fool the heuristic.
+        "Here's an example:\n\n```\n\\section{Quoted}\nNot real.\n```\n\nBack to prose.",
+        # Untagged fence quoting an equation env -- still markdown.
+        "Example:\n```\n\\begin{equation}\nE = mc^2\n\\end{equation}\n```\n",
+        # Markdown content surrounding fenced LaTeX example.
+        "# Tutorial\n\nWrite section headers like this:\n\n```\n\\section{Foo}\n```\n\nThen save the file.",
+        # Python fence happens to mention \documentclass in a string.
+        "```python\nprint('\\\\documentclass{article}')\n```",
+    ],
+)
+def test_looks_like_latex_ignores_latex_inside_fenced_code_blocks(content: str) -> None:
+    assert looks_like_latex(content) is False
+
+
+def test_looks_like_latex_still_honors_explicit_latex_fence_inside_other_fence() -> None:
+    # Author explicitly tagged a ```latex fence -- that is a declared LaTeX
+    # signal and wins over the fence-stripping heuristic.
+    content = "Some prose.\n\n```latex\n\\section{Real}\n```\n"
+    assert looks_like_latex(content) is True
 
 
 # ─── maybe_convert_to_latex ──────────────────────────────────────────────────
@@ -85,6 +123,22 @@ def test_maybe_convert_passes_through_when_pandoc_too_old() -> None:
 
 def test_maybe_convert_returns_empty_for_empty_input() -> None:
     assert maybe_convert_to_latex("", pandoc_status=_stub_status(available=True)) == ""
+
+
+def test_maybe_convert_reraises_pandoc_execution_error(monkeypatch: pytest.MonkeyPatch) -> None:
+    # If pandoc runs but errors, we must surface it -- silently returning
+    # the markdown source compiles a .tex file full of unprocessed ``# ``
+    # headings and yields garbage output.
+    def _boom(*_args, **_kwargs):
+        raise PandocExecutionError("pandoc exited 1", stderr="bad input", returncode=1)
+
+    monkeypatch.setattr(markdown_support, "markdown_to_latex_fragment", _boom)
+
+    with pytest.raises(PandocExecutionError):
+        maybe_convert_to_latex(
+            "# Plain markdown\n\nBody.\n",
+            pandoc_status=_stub_status(available=True),
+        )
 
 
 @pytest.mark.skipif(not HAS_PANDOC, reason="pandoc not installed")
