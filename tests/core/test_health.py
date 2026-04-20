@@ -834,7 +834,7 @@ class TestCheckKnowledgeInventory:
 
     def test_reports_plan_level_explicit_knowledge_dependency_issues(self, tmp_path: Path) -> None:
         cwd = _bootstrap_health_project(tmp_path)
-        phase_dir = cwd / "GRD" / "phases" / "01-setup"
+        phase_dir = cwd / ".grd" / "phases" / "01-setup"
         phase_dir.mkdir(parents=True, exist_ok=True)
         plan_content = _canonical_plan_frontmatter().replace(
             "---\n\nFixture plan body.\n",
@@ -846,12 +846,12 @@ class TestCheckKnowledgeInventory:
 
         assert result.status == CheckStatus.WARN
         assert result.details["plans_with_knowledge_deps_count"] == 1
-        assert result.details["plans_with_knowledge_deps"] == ["GRD/phases/01-setup/01-PLAN.md"]
+        assert result.details["plans_with_knowledge_deps"] == [".grd/phases/01-setup/01-PLAN.md"]
         assert result.details["plan_knowledge_dependency_issue_count"] == 1
         assert result.details["plan_knowledge_warning_count"] == 1
         assert result.details["plan_knowledge_blocker_count"] == 0
-        assert result.details["plan_knowledge_issue_files"] == ["GRD/phases/01-setup/01-PLAN.md"]
-        assert any("GRD/phases/01-setup/01-PLAN.md:" in warning for warning in result.warnings)
+        assert result.details["plan_knowledge_issue_files"] == [".grd/phases/01-setup/01-PLAN.md"]
+        assert any(".grd/phases/01-setup/01-PLAN.md:" in warning for warning in result.warnings)
         assert any("K-missing-dependency" in warning for warning in result.warnings)
 
 
@@ -878,10 +878,10 @@ class TestCheckStoragePaths:
 
     def test_hidden_results_and_scratch_outputs_warn(self, tmp_path: Path) -> None:
         cwd = _bootstrap_health_project(tmp_path)
-        hidden_results = cwd / "GRD" / "phases" / "01-setup" / "results"
+        hidden_results = cwd / ".grd" / "phases" / "01-setup" / "results"
         hidden_results.mkdir(parents=True)
         (hidden_results / "out.json").write_text("{}", encoding="utf-8")
-        scratch_file = cwd / "GRD" / "tmp" / "final.csv"
+        scratch_file = cwd / ".grd" / "tmp" / "final.csv"
         scratch_file.parent.mkdir(parents=True)
         scratch_file.write_text("x,y\n", encoding="utf-8")
 
@@ -955,9 +955,9 @@ class TestCheckStoragePaths:
 
     def test_git_status_reports_dirty_tracked_checkpoint_artifacts(self, tmp_path: Path) -> None:
         repo = _init_git_repo(tmp_path)
-        checkpoint_dir = repo / "GRD" / "phase-checkpoints"
+        checkpoint_dir = repo / ".grd" / "phase-checkpoints"
         checkpoint_dir.mkdir(parents=True)
-        root_index = repo / "GRD" / "CHECKPOINTS.md"
+        root_index = repo / ".grd" / "CHECKPOINTS.md"
         phase_checkpoint = checkpoint_dir / "01-test-phase.md"
         root_index.write_text("initial index\n", encoding="utf-8")
         phase_checkpoint.write_text("initial phase checkpoint\n", encoding="utf-8")
@@ -1214,7 +1214,7 @@ class TestCheckStateValidityProjectContract:
         contract["references"][0]["required_actions"] = []
 
         state = {"project_contract": contract}
-        (cwd / "GRD" / "state.json").write_text(json.dumps(state), encoding="utf-8")
+        (cwd / ".grd" / "state.json").write_text(json.dumps(state), encoding="utf-8")
 
         approval_validation = validate_project_contract(contract, mode="approved")
         fake_state_validation = SimpleNamespace(
@@ -1255,7 +1255,7 @@ class TestCheckStateValidityProjectContract:
         state = default_state_dict()
         state["project_contract"] = contract
         save_state_json(cwd, state)
-        (cwd / "GRD" / "STATE.md").write_text(generate_state_markdown(state), encoding="utf-8")
+        (cwd / ".grd" / "STATE.md").write_text(generate_state_markdown(state), encoding="utf-8")
 
         result = check_state_validity(cwd)
 
@@ -1817,7 +1817,7 @@ trigger:
 
 
 def _bootstrap_health_project(tmp_path: Path) -> Path:
-    planning = tmp_path / "GRD"
+    planning = tmp_path / ".grd"
     planning.mkdir()
     (planning / "phases").mkdir()
     (planning / "state.json").write_text("{}", encoding="utf-8")
@@ -1941,13 +1941,14 @@ class TestCheckLatestReturn:
 
     def test_summary_with_valid_return_is_ok(self, tmp_path: Path) -> None:
         cwd = _bootstrap_health_project(tmp_path)
-        phase_dir = cwd / "GRD" / "phases" / "01-setup"
+        phase_dir = cwd / ".grd" / "phases" / "01-setup"
         phase_dir.mkdir(parents=True)
         summary_content = (
             "# Summary\n\n"
             "```yaml\n"
             "grd_return:\n"
             "  status: completed\n"
+            "  duration_seconds: 10\n"
             "  files_written: [src/main.py]\n"
             "  issues: []\n"
             "  next_actions: [/grd:verify-work 02]\n"
@@ -1960,11 +1961,11 @@ class TestCheckLatestReturn:
         assert result.status == CheckStatus.OK
         assert result.label == "Latest Return Envelope"
         assert result.details["file"] == "01-setup/01-setup-01-SUMMARY.md"
-        assert result.details["fields_found"] == ["files_written", "issues", "next_actions", "status"]
+        assert result.details["fields_found"] == ["duration_seconds", "files_written", "issues", "next_actions", "status"]
 
     def test_summary_without_return_block_fails_closed(self, tmp_path: Path) -> None:
         cwd = _bootstrap_health_project(tmp_path)
-        phase_dir = cwd / "GRD" / "phases" / "01-setup"
+        phase_dir = cwd / ".grd" / "phases" / "01-setup"
         phase_dir.mkdir(parents=True)
         (phase_dir / "01-setup-01-SUMMARY.md").write_text(
             "# Summary\nJust text, no return block.\n",
@@ -1980,7 +1981,7 @@ class TestCheckLatestReturn:
         self, tmp_path: Path, monkeypatch: pytest.MonkeyPatch
     ) -> None:
         cwd = _bootstrap_health_project(tmp_path)
-        phase_dir = cwd / "GRD" / "phases" / "01-setup"
+        phase_dir = cwd / ".grd" / "phases" / "01-setup"
         phase_dir.mkdir(parents=True)
         (phase_dir / "01-setup-01-SUMMARY.md").write_text(
             "# Summary\n\n```yaml\ngrd_return:\n  status: completed\n```\n",
@@ -2009,7 +2010,7 @@ class TestCheckLatestReturn:
         self, tmp_path: Path, monkeypatch: pytest.MonkeyPatch
     ) -> None:
         cwd = _bootstrap_health_project(tmp_path)
-        phase_dir = cwd / "GRD" / "phases" / "01-setup"
+        phase_dir = cwd / ".grd" / "phases" / "01-setup"
         phase_dir.mkdir(parents=True)
         (phase_dir / "01-setup-01-SUMMARY.md").write_text(
             "# Summary\n\n```yaml\ngrd_return:\n  status: mystery\n```\n",
@@ -2036,7 +2037,7 @@ class TestCheckLatestReturn:
 
     def test_summary_with_coercive_numeric_return_counts_fails(self, tmp_path: Path) -> None:
         cwd = _bootstrap_health_project(tmp_path)
-        phase_dir = cwd / "GRD" / "phases" / "01-setup"
+        phase_dir = cwd / ".grd" / "phases" / "01-setup"
         phase_dir.mkdir(parents=True)
         (phase_dir / "01-setup-01-SUMMARY.md").write_text(
             "# Summary\n\n"
@@ -2070,7 +2071,7 @@ class TestCheckResultConsistency:
 
     def test_empty_results_and_no_summaries_returns_ok(self, tmp_path: Path) -> None:
         """When both registries are empty, there is nothing to mismatch."""
-        planning = tmp_path / "GRD"
+        planning = tmp_path / ".grd"
         planning.mkdir()
         (planning / "state.json").write_text(
             json.dumps({"intermediate_results": []}),
@@ -2083,7 +2084,7 @@ class TestCheckResultConsistency:
 
     def test_matching_results_returns_ok(self, tmp_path: Path) -> None:
         """When descriptions and provides match, check should return OK."""
-        planning = tmp_path / "GRD"
+        planning = tmp_path / ".grd"
         planning.mkdir()
         phases = planning / "phases"
         phase_dir = phases / "01-setup"
@@ -2118,7 +2119,7 @@ class TestCheckResultConsistency:
 
     def test_state_only_result_warns(self, tmp_path: Path) -> None:
         """A result in state.json with no SUMMARY provides should warn."""
-        planning = tmp_path / "GRD"
+        planning = tmp_path / ".grd"
         planning.mkdir()
         (planning / "phases").mkdir()
 
@@ -2140,7 +2141,7 @@ class TestCheckResultConsistency:
 
     def test_summary_only_provides_warns(self, tmp_path: Path) -> None:
         """A SUMMARY provides with no state.json result should warn."""
-        planning = tmp_path / "GRD"
+        planning = tmp_path / ".grd"
         planning.mkdir()
         phases = planning / "phases"
         phase_dir = phases / "01-setup"
@@ -2165,7 +2166,7 @@ class TestCheckResultConsistency:
 
     def test_substring_match_is_accepted(self, tmp_path: Path) -> None:
         """Substring matching should link related descriptions and provides."""
-        planning = tmp_path / "GRD"
+        planning = tmp_path / ".grd"
         planning.mkdir()
         phases = planning / "phases"
         phase_dir = phases / "01-setup"
@@ -2199,7 +2200,7 @@ class TestCheckResultConsistency:
 
     def test_case_insensitive_matching(self, tmp_path: Path) -> None:
         """Matching should be case-insensitive."""
-        planning = tmp_path / "GRD"
+        planning = tmp_path / ".grd"
         planning.mkdir()
         phases = planning / "phases"
         phase_dir = phases / "01-setup"
@@ -2230,7 +2231,7 @@ class TestCheckResultConsistency:
 
     def test_structured_provides_with_name_key(self, tmp_path: Path) -> None:
         """Structured provides entries with 'name' key should be extracted."""
-        planning = tmp_path / "GRD"
+        planning = tmp_path / ".grd"
         planning.mkdir()
         phases = planning / "phases"
         phase_dir = phases / "01-setup"
@@ -2264,7 +2265,7 @@ class TestCheckResultConsistency:
 
     def test_results_without_description_are_skipped(self, tmp_path: Path) -> None:
         """Results without descriptions should not cause false warnings."""
-        planning = tmp_path / "GRD"
+        planning = tmp_path / ".grd"
         planning.mkdir()
         (planning / "phases").mkdir()
 
@@ -2285,7 +2286,7 @@ class TestCheckResultConsistency:
 
     def test_both_directions_mismatch(self, tmp_path: Path) -> None:
         """Both state-only and summary-only mismatches should appear."""
-        planning = tmp_path / "GRD"
+        planning = tmp_path / ".grd"
         planning.mkdir()
         phases = planning / "phases"
         phase_dir = phases / "01-setup"
@@ -2327,7 +2328,7 @@ class TestCheckResultConsistency:
         In Python, ``"" in "any string"`` is ``True``. Without a guard, a
         single ``""`` in provides would silently match every result description.
         """
-        planning = tmp_path / "GRD"
+        planning = tmp_path / ".grd"
         planning.mkdir()
         (planning / "phases").mkdir()
         state = {
@@ -2352,7 +2353,7 @@ class TestCheckResultConsistency:
         self, tmp_path: Path
     ) -> None:
         """Whitespace-only provides like ``"   "`` must be treated like empty."""
-        planning = tmp_path / "GRD"
+        planning = tmp_path / ".grd"
         planning.mkdir()
         (planning / "phases").mkdir()
         state = {
@@ -2383,7 +2384,7 @@ class TestCheckResultConsistency:
         malformed records, so we monkeypatch result_list to simulate the
         failure path.
         """
-        planning = tmp_path / "GRD"
+        planning = tmp_path / ".grd"
         planning.mkdir()
         (planning / "phases").mkdir()
         (planning / "state.json").write_text(
@@ -2407,7 +2408,7 @@ class TestCheckResultConsistency:
     ) -> None:
         """Verify that state-loading normalization strips malformed records
         (missing ``id``), so result_list sees only valid records and returns OK."""
-        planning = tmp_path / "GRD"
+        planning = tmp_path / ".grd"
         planning.mkdir()
         (planning / "phases").mkdir()
         (planning / "state.json").write_text(
@@ -2426,7 +2427,7 @@ class TestCheckResultConsistency:
     ) -> None:
         """Provides shorter than _MIN_PROVIDES_LENGTH must not substring-match;
         they should only exact-match (case-insensitive)."""
-        planning = tmp_path / "GRD"
+        planning = tmp_path / ".grd"
         planning.mkdir()
         (planning / "phases").mkdir()
         state = {
@@ -2450,7 +2451,7 @@ class TestCheckResultConsistency:
     ) -> None:
         """A short provides string should still match if it is an exact
         case-insensitive match for a result description."""
-        planning = tmp_path / "GRD"
+        planning = tmp_path / ".grd"
         planning.mkdir()
         (planning / "phases").mkdir()
         state = {
@@ -2475,7 +2476,7 @@ class TestCheckResultConsistency:
     ) -> None:
         """Structured provides dicts with a ``provides`` key (not ``name``)
         should have their value extracted and matched."""
-        planning = tmp_path / "GRD"
+        planning = tmp_path / ".grd"
         planning.mkdir()
         phases = planning / "phases"
         phase_dir = phases / "01-setup"
@@ -2498,7 +2499,7 @@ class TestCheckResultConsistency:
         self, tmp_path: Path
     ) -> None:
         """Structured provides dict with empty ``name`` must be skipped."""
-        planning = tmp_path / "GRD"
+        planning = tmp_path / ".grd"
         planning.mkdir()
         phases = planning / "phases"
         phase_dir = phases / "01-setup"
