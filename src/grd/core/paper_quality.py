@@ -708,16 +708,23 @@ def score_paper_quality(data: PaperQualityInput) -> PaperQualityReport:
 
 _PLACEHOLDER_FINDING_RE = re.compile(r"\b(TODO|FIXME|PENDING|TBD|XXX)\b")
 
-# Matches in-text LaTeX/natbib/biblatex citation commands (including
-# starred variants like \cite*{} and capitalized sentence-start forms).
+# Matches in-text LaTeX/natbib citation commands (including starred
+# variants like \cite*{} and capitalized sentence-start forms).
 # Used by the quality scorer (paper_quality_artifacts.py) and draft lint.
 #
 # Lowercase: \cite, \citep, \citet, \citealt, \citealp, \citeauthor,
 #   \citeyear
 # Capitalized: \Cite, \Citep, \Citet, \Citealt, \Citealp, \Citeauthor,
 #   \Citeyear
-# Biblatex: \parencite, \textcite, \autocite
 #
+# NOTE: biblatex commands (\parencite, \textcite, \autocite) are
+# intentionally NOT recognized.  No shipped template loads
+# \usepackage{biblatex} — every template is natbib-based (directly,
+# via a wrapper like aastex/jheppub, or via a class option like
+# revtex4-2's `natbib`).  Recognizing biblatex commands would reward
+# authors for writing markup that fails to compile on every template.
+# If a biblatex template is ever added, this regex should grow an
+# opt-in branch alongside the template, not ahead of it.
 # NOTE: \nocite is intentionally excluded — it does not represent an
 # in-text citation and must not inflate quality scores.  The coherence
 # checker uses _CITE_CMD_PREFIX_WITH_NOCITE instead.
@@ -730,7 +737,6 @@ _CITE_CMD_PREFIX = (
     r"\\(?:"
     r"cite(?:p|t|alt|alp|author|year)?\*?"
     r"|Cite(?:p|t|alt|alp|author|year)?\*?"
-    r"|parencite|textcite|autocite"
     r")"
 )
 
@@ -742,7 +748,6 @@ _CITE_CMD_PREFIX_WITH_NOCITE = (
     r"cite(?:p|t|alt|alp|author|year)?\*?"
     r"|Cite(?:p|t|alt|alp|author|year)?\*?"
     r"|nocite"
-    r"|parencite|textcite|autocite"
     r")"
 )
 

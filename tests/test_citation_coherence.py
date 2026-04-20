@@ -131,7 +131,14 @@ class TestCitationBibCoherence:
         assert "hidden_ref" in result.tex_cite_keys
         assert "other" in result.unreferenced_bib_keys
 
-    def test_biblatex_commands_detected(self) -> None:
+    def test_biblatex_commands_not_detected(self) -> None:
+        r"""Biblatex commands (\parencite, \textcite, \autocite) are
+        intentionally NOT recognized: no shipped template loads
+        \usepackage{biblatex}, so rewarding authors for biblatex markup
+        would produce manuscripts that fail to compile.  The coherence
+        check treats these as zero citations and surfaces the bib keys
+        as unreferenced.  See ge-b7n.
+        """
         tex = r"\parencite{a} and \textcite{b} and \autocite{c}"
         bib = (
             "@article{a,\n  title={A},\n  author={Doe},\n  year={2020}\n}\n"
@@ -139,8 +146,8 @@ class TestCitationBibCoherence:
             "@article{c,\n  title={C},\n  author={Doe},\n  year={2020}\n}\n"
         )
         result = check_citation_bib_coherence(tex, bib)
-        assert result.tex_cite_keys == {"a", "b", "c"}
-        assert result.warnings == []
+        assert result.tex_cite_keys == set()
+        assert result.unreferenced_bib_keys == {"a", "b", "c"}
 
     def test_citetext_ignored_inner_citealp_extracted(self) -> None:
         r"""\\citetext is excluded from the regex (BUG-076 fix).
