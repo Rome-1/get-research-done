@@ -8,7 +8,11 @@
 \usepackage{amssymb}
 \usepackage{wasysym}
 \providecommand{\tightlist}{\setlength{\itemsep}{0pt}\setlength{\parskip}{0pt}}
-% jheppub already provides \citet/\citep via its own author-year machinery.
+% Citation resolution: \citet{key} (textual) and \citep{key} (parenthetical)
+% resolve through jheppub, which wraps natbib internally with JHEP-flavoured
+% author-year defaults. We do NOT \usepackage{natbib} here -- jheppub already
+% pulls it in and a second load triggers "Option clash" errors.
+% \bibliographystyle{JHEP} + \bibliography{...} below feed bibtex.
 
 \title{\VAR{title}}
 

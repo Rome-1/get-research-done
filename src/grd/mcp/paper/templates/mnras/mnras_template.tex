@@ -1,5 +1,10 @@
 %# MNRAS template -- Monthly Notices of the Royal Astronomical Society
 %# Jinja2 template with custom LaTeX-safe delimiters
+% Citation resolution: \citet{key} (textual) and \citep{key} (parenthetical)
+% resolve through natbib, enabled here by the [usenatbib] class option on
+% the mnras documentclass. Without that option, mnras falls back to its own
+% bare \cite which does NOT understand natbib-style author-year forms.
+% \bibliographystyle{mnras} + \bibliography{...} below feed bibtex.
 \documentclass[usenatbib]{mnras}
 
 \usepackage{graphicx}
