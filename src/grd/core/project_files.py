@@ -10,7 +10,7 @@ from grd.core.constants import PLANNING_DIR_NAME, PROJECT_FILENAME, ROADMAP_FILE
 
 logger = logging.getLogger("grd")
 
-_MIGRATABLE_FILES = (ROADMAP_FILENAME, PROJECT_FILENAME)
+MIGRATABLE_FILES = (ROADMAP_FILENAME, PROJECT_FILENAME)
 
 
 def migrate_root_planning_files(project_root: Path) -> list[str]:
@@ -23,7 +23,7 @@ def migrate_root_planning_files(project_root: Path) -> list[str]:
     """
     grd_dir = project_root / PLANNING_DIR_NAME
     migrated: list[str] = []
-    for filename in _MIGRATABLE_FILES:
+    for filename in MIGRATABLE_FILES:
         grd_path = grd_dir / filename
         root_path = project_root / filename
         if grd_path.exists() or not root_path.exists():
