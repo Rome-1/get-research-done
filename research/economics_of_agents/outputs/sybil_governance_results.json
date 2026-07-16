@@ -1,0 +1,1688 @@
+{
+  "experiment": "sybil_governance",
+  "n_honest": 50,
+  "n_replications": 50,
+  "attacker_ideal": 90.0,
+  "results": [
+    {
+      "mechanism": "1p1v",
+      "n_sybils": 0,
+      "identity_cost": 0.0,
+      "mean_deviation": 0.0,
+      "std_deviation": 0.0,
+      "mean_attacker_gain": 0.0,
+      "mean_attacker_profit": 0.0,
+      "attack_profitable": 0.0
+    },
+    {
+      "mechanism": "quadratic",
+      "n_sybils": 0,
+      "identity_cost": 0.0,
+      "mean_deviation": 0.972295066900746,
+      "std_deviation": 0.08717097525574653,
+      "mean_attacker_gain": 0.972295066900746,
+      "mean_attacker_profit": 0.972295066900746,
+      "attack_profitable": 1.0
+    },
+    {
+      "mechanism": "conviction",
+      "n_sybils": 0,
+      "identity_cost": 0.0,
+      "mean_deviation": 0.0,
+      "std_deviation": 0.0,
+      "mean_attacker_gain": 0.0,
+      "mean_attacker_profit": 0.0,
+      "attack_profitable": 0.0
+    },
+    {
+      "mechanism": "1p1v",
+      "n_sybils": 0,
+      "identity_cost": 0.1,
+      "mean_deviation": 0.0,
+      "std_deviation": 0.0,
+      "mean_attacker_gain": 0.0,
+      "mean_attacker_profit": 0.0,
+      "attack_profitable": 0.0
+    },
+    {
+      "mechanism": "quadratic",
+      "n_sybils": 0,
+      "identity_cost": 0.1,
+      "mean_deviation": 0.9608464727354105,
+      "std_deviation": 0.06914687623131381,
+      "mean_attacker_gain": 0.9608464727354105,
+      "mean_attacker_profit": 0.9608464727354105,
+      "attack_profitable": 1.0
+    },
+    {
+      "mechanism": "conviction",
+      "n_sybils": 0,
+      "identity_cost": 0.1,
+      "mean_deviation": 0.0,
+      "std_deviation": 0.0,
+      "mean_attacker_gain": 0.0,
+      "mean_attacker_profit": 0.0,
+      "attack_profitable": 0.0
+    },
+    {
+      "mechanism": "1p1v",
+      "n_sybils": 0,
+      "identity_cost": 0.5,
+      "mean_deviation": 0.0,
+      "std_deviation": 0.0,
+      "mean_attacker_gain": 0.0,
+      "mean_attacker_profit": 0.0,
+      "attack_profitable": 0.0
+    },
+    {
+      "mechanism": "quadratic",
+      "n_sybils": 0,
+      "identity_cost": 0.5,
+      "mean_deviation": 0.9862746480216105,
+      "std_deviation": 0.06945133754685848,
+      "mean_attacker_gain": 0.9862746480216105,
+      "mean_attacker_profit": 0.9862746480216105,
+      "attack_profitable": 1.0
+    },
+    {
+      "mechanism": "conviction",
+      "n_sybils": 0,
+      "identity_cost": 0.5,
+      "mean_deviation": 0.0,
+      "std_deviation": 0.0,
+      "mean_attacker_gain": 0.0,
+      "mean_attacker_profit": 0.0,
+      "attack_profitable": 0.0
+    },
+    {
+      "mechanism": "1p1v",
+      "n_sybils": 0,
+      "identity_cost": 1.0,
+      "mean_deviation": 0.0,
+      "std_deviation": 0.0,
+      "mean_attacker_gain": 0.0,
+      "mean_attacker_profit": 0.0,
+      "attack_profitable": 0.0
+    },
+    {
+      "mechanism": "quadratic",
+      "n_sybils": 0,
+      "identity_cost": 1.0,
+      "mean_deviation": 0.984434411337073,
+      "std_deviation": 0.06789717713519144,
+      "mean_attacker_gain": 0.984434411337073,
+      "mean_attacker_profit": 0.984434411337073,
+      "attack_profitable": 1.0
+    },
+    {
+      "mechanism": "conviction",
+      "n_sybils": 0,
+      "identity_cost": 1.0,
+      "mean_deviation": 0.0,
+      "std_deviation": 0.0,
+      "mean_attacker_gain": 0.0,
+      "mean_attacker_profit": 0.0,
+      "attack_profitable": 0.0
+    },
+    {
+      "mechanism": "1p1v",
+      "n_sybils": 0,
+      "identity_cost": 2.0,
+      "mean_deviation": 0.0,
+      "std_deviation": 0.0,
+      "mean_attacker_gain": 0.0,
+      "mean_attacker_profit": 0.0,
+      "attack_profitable": 0.0
+    },
+    {
+      "mechanism": "quadratic",
+      "n_sybils": 0,
+      "identity_cost": 2.0,
+      "mean_deviation": 0.9748691696670768,
+      "std_deviation": 0.07522253182326981,
+      "mean_attacker_gain": 0.9748691696670768,
+      "mean_attacker_profit": 0.9748691696670768,
+      "attack_profitable": 1.0
+    },
+    {
+      "mechanism": "conviction",
+      "n_sybils": 0,
+      "identity_cost": 2.0,
+      "mean_deviation": 0.0,
+      "std_deviation": 0.0,
+      "mean_attacker_gain": 0.0,
+      "mean_attacker_profit": 0.0,
+      "attack_profitable": 0.0
+    },
+    {
+      "mechanism": "1p1v",
+      "n_sybils": 0,
+      "identity_cost": 5.0,
+      "mean_deviation": 0.0,
+      "std_deviation": 0.0,
+      "mean_attacker_gain": 0.0,
+      "mean_attacker_profit": 0.0,
+      "attack_profitable": 0.0
+    },
+    {
+      "mechanism": "quadratic",
+      "n_sybils": 0,
+      "identity_cost": 5.0,
+      "mean_deviation": 0.9764581112937197,
+      "std_deviation": 0.07692963202379513,
+      "mean_attacker_gain": 0.9764581112937197,
+      "mean_attacker_profit": 0.9764581112937197,
+      "attack_profitable": 1.0
+    },
+    {
+      "mechanism": "conviction",
+      "n_sybils": 0,
+      "identity_cost": 5.0,
+      "mean_deviation": 0.0,
+      "std_deviation": 0.0,
+      "mean_attacker_gain": 0.0,
+      "mean_attacker_profit": 0.0,
+      "attack_profitable": 0.0
+    },
+    {
+      "mechanism": "1p1v",
+      "n_sybils": 0,
+      "identity_cost": 10.0,
+      "mean_deviation": 0.0,
+      "std_deviation": 0.0,
+      "mean_attacker_gain": 0.0,
+      "mean_attacker_profit": 0.0,
+      "attack_profitable": 0.0
+    },
+    {
+      "mechanism": "quadratic",
+      "n_sybils": 0,
+      "identity_cost": 10.0,
+      "mean_deviation": 0.9830182914238871,
+      "std_deviation": 0.06968600041806537,
+      "mean_attacker_gain": 0.9830182914238871,
+      "mean_attacker_profit": 0.9830182914238871,
+      "attack_profitable": 1.0
+    },
+    {
+      "mechanism": "conviction",
+      "n_sybils": 0,
+      "identity_cost": 10.0,
+      "mean_deviation": 0.0,
+      "std_deviation": 0.0,
+      "mean_attacker_gain": 0.0,
+      "mean_attacker_profit": 0.0,
+      "attack_profitable": 0.0
+    },
+    {
+      "mechanism": "1p1v",
+      "n_sybils": 1,
+      "identity_cost": 0.0,
+      "mean_deviation": 0.5677539666619417,
+      "std_deviation": 0.4347493010286223,
+      "mean_attacker_gain": 0.5677539666619417,
+      "mean_attacker_profit": 0.5677539666619417,
+      "attack_profitable": 1.0
+    },
+    {
+      "mechanism": "quadratic",
+      "n_sybils": 1,
+      "identity_cost": 0.0,
+      "mean_deviation": 1.9141967738652585,
+      "std_deviation": 0.14827313916260904,
+      "mean_attacker_gain": 1.9141967738652585,
+      "mean_attacker_profit": 1.9141967738652585,
+      "attack_profitable": 1.0
+    },
+    {
+      "mechanism": "conviction",
+      "n_sybils": 1,
+      "identity_cost": 0.0,
+      "mean_deviation": 0.0,
+      "std_deviation": 0.0,
+      "mean_attacker_gain": 0.0,
+      "mean_attacker_profit": 0.0,
+      "attack_profitable": 0.0
+    },
+    {
+      "mechanism": "1p1v",
+      "n_sybils": 1,
+      "identity_cost": 0.1,
+      "mean_deviation": 0.43738707893303685,
+      "std_deviation": 0.38643233519746,
+      "mean_attacker_gain": 0.43738707893303685,
+      "mean_attacker_profit": 0.33738707893303677,
+      "attack_profitable": 0.78
+    },
+    {
+      "mechanism": "quadratic",
+      "n_sybils": 1,
+      "identity_cost": 0.1,
+      "mean_deviation": 1.9038858424688612,
+      "std_deviation": 0.1499356871736889,
+      "mean_attacker_gain": 1.9038858424688612,
+      "mean_attacker_profit": 1.8038858424688613,
+      "attack_profitable": 1.0
+    },
+    {
+      "mechanism": "conviction",
+      "n_sybils": 1,
+      "identity_cost": 0.1,
+      "mean_deviation": 0.0,
+      "std_deviation": 0.0,
+      "mean_attacker_gain": 0.0,
+      "mean_attacker_profit": -0.09999999999999998,
+      "attack_profitable": 0.0
+    },
+    {
+      "mechanism": "1p1v",
+      "n_sybils": 1,
+      "identity_cost": 0.5,
+      "mean_deviation": 0.476091782211536,
+      "std_deviation": 0.44369410680883414,
+      "mean_attacker_gain": 0.476091782211536,
+      "mean_attacker_profit": -0.023908217788464015,
+      "attack_profitable": 0.3
+    },
+    {
+      "mechanism": "quadratic",
+      "n_sybils": 1,
+      "identity_cost": 0.5,
+      "mean_deviation": 1.9333583919023918,
+      "std_deviation": 0.13402589263311282,
+      "mean_attacker_gain": 1.9333583919023918,
+      "mean_attacker_profit": 1.4333583919023918,
+      "attack_profitable": 1.0
+    },
+    {
+      "mechanism": "conviction",
+      "n_sybils": 1,
+      "identity_cost": 0.5,
+      "mean_deviation": 0.0,
+      "std_deviation": 0.0,
+      "mean_attacker_gain": 0.0,
+      "mean_attacker_profit": -0.5,
+      "attack_profitable": 0.0
+    },
+    {
+      "mechanism": "1p1v",
+      "n_sybils": 1,
+      "identity_cost": 1.0,
+      "mean_deviation": 0.49247087287011837,
+      "std_deviation": 0.47974261580573196,
+      "mean_attacker_gain": 0.49247087287011837,
+      "mean_attacker_profit": -0.5075291271298816,
+      "attack_profitable": 0.14
+    },
+    {
+      "mechanism": "quadratic",
+      "n_sybils": 1,
+      "identity_cost": 1.0,
+      "mean_deviation": 1.923910900739368,
+      "std_deviation": 0.14564328928765854,
+      "mean_attacker_gain": 1.923910900739368,
+      "mean_attacker_profit": 0.9239109007393678,
+      "attack_profitable": 1.0
+    },
+    {
+      "mechanism": "conviction",
+      "n_sybils": 1,
+      "identity_cost": 1.0,
+      "mean_deviation": 1.0,
+      "std_deviation": 7.0,
+      "mean_attacker_gain": 1.0,
+      "mean_attacker_profit": 0.0,
+      "attack_profitable": 0.02
+    },
+    {
+      "mechanism": "1p1v",
+      "n_sybils": 1,
+      "identity_cost": 2.0,
+      "mean_deviation": 0.49455418491645275,
+      "std_deviation": 0.5311908368274014,
+      "mean_attacker_gain": 0.49455418491645275,
+      "mean_attacker_profit": -1.5054458150835472,
+      "attack_profitable": 0.02
+    },
+    {
+      "mechanism": "quadratic",
+      "n_sybils": 1,
+      "identity_cost": 2.0,
+      "mean_deviation": 1.893381143485156,
+      "std_deviation": 0.14134577585496852,
+      "mean_attacker_gain": 1.893381143485156,
+      "mean_attacker_profit": -0.10661885651484383,
+      "attack_profitable": 0.2
+    },
+    {
+      "mechanism": "conviction",
+      "n_sybils": 1,
+      "identity_cost": 2.0,
+      "mean_deviation": 0.9,
+      "std_deviation": 6.3,
+      "mean_attacker_gain": 0.9,
+      "mean_attacker_profit": -1.1,
+      "attack_profitable": 0.02
+    },
+    {
+      "mechanism": "1p1v",
+      "n_sybils": 1,
+      "identity_cost": 5.0,
+      "mean_deviation": 0.49228858323018115,
+      "std_deviation": 0.5115230890960321,
+      "mean_attacker_gain": 0.49228858323018115,
+      "mean_attacker_profit": -4.507711416769819,
+      "attack_profitable": 0.0
+    },
+    {
+      "mechanism": "quadratic",
+      "n_sybils": 1,
+      "identity_cost": 5.0,
+      "mean_deviation": 1.9410023395063536,
+      "std_deviation": 0.1490463262002983,
+      "mean_attacker_gain": 1.9410023395063536,
+      "mean_attacker_profit": -3.0589976604936457,
+      "attack_profitable": 0.0
+    },
+    {
+      "mechanism": "conviction",
+      "n_sybils": 1,
+      "identity_cost": 5.0,
+      "mean_deviation": 0.0,
+      "std_deviation": 0.0,
+      "mean_attacker_gain": 0.0,
+      "mean_attacker_profit": -5.0,
+      "attack_profitable": 0.0
+    },
+    {
+      "mechanism": "1p1v",
+      "n_sybils": 1,
+      "identity_cost": 10.0,
+      "mean_deviation": 0.43629142058561254,
+      "std_deviation": 0.45845793320120204,
+      "mean_attacker_gain": 0.43629142058561254,
+      "mean_attacker_profit": -9.563708579414389,
+      "attack_profitable": 0.0
+    },
+    {
+      "mechanism": "quadratic",
+      "n_sybils": 1,
+      "identity_cost": 10.0,
+      "mean_deviation": 1.92197216096771,
+      "std_deviation": 0.1393770411660266,
+      "mean_attacker_gain": 1.92197216096771,
+      "mean_attacker_profit": -8.078027839032291,
+      "attack_profitable": 0.0
+    },
+    {
+      "mechanism": "conviction",
+      "n_sybils": 1,
+      "identity_cost": 10.0,
+      "mean_deviation": 0.0,
+      "std_deviation": 0.0,
+      "mean_attacker_gain": 0.0,
+      "mean_attacker_profit": -10.0,
+      "attack_profitable": 0.0
+    },
+    {
+      "mechanism": "1p1v",
+      "n_sybils": 2,
+      "identity_cost": 0.0,
+      "mean_deviation": 0.8902826460626011,
+      "std_deviation": 0.6049736400444715,
+      "mean_attacker_gain": 0.8902826460626011,
+      "mean_attacker_profit": 0.8902826460626011,
+      "attack_profitable": 1.0
+    },
+    {
+      "mechanism": "quadratic",
+      "n_sybils": 2,
+      "identity_cost": 0.0,
+      "mean_deviation": 2.8317238965114853,
+      "std_deviation": 0.21186687245067404,
+      "mean_attacker_gain": 2.8317238965114853,
+      "mean_attacker_profit": 2.8317238965114853,
+      "attack_profitable": 1.0
+    },
+    {
+      "mechanism": "conviction",
+      "n_sybils": 2,
+      "identity_cost": 0.0,
+      "mean_deviation": 1.0,
+      "std_deviation": 7.0,
+      "mean_attacker_gain": 1.0,
+      "mean_attacker_profit": 1.0,
+      "attack_profitable": 0.02
+    },
+    {
+      "mechanism": "1p1v",
+      "n_sybils": 2,
+      "identity_cost": 0.1,
+      "mean_deviation": 1.2225055164752712,
+      "std_deviation": 0.7659494300076146,
+      "mean_attacker_gain": 1.2225055164752712,
+      "mean_attacker_profit": 1.022505516475271,
+      "attack_profitable": 0.98
+    },
+    {
+      "mechanism": "quadratic",
+      "n_sybils": 2,
+      "identity_cost": 0.1,
+      "mean_deviation": 2.8135109803675387,
+      "std_deviation": 0.21403634004843708,
+      "mean_attacker_gain": 2.8135109803675387,
+      "mean_attacker_profit": 2.613510980367539,
+      "attack_profitable": 1.0
+    },
+    {
+      "mechanism": "conviction",
+      "n_sybils": 2,
+      "identity_cost": 0.1,
+      "mean_deviation": 1.5,
+      "std_deviation": 6.020797289396148,
+      "mean_attacker_gain": 1.5,
+      "mean_attacker_profit": 1.3000000000000003,
+      "attack_profitable": 0.06
+    },
+    {
+      "mechanism": "1p1v",
+      "n_sybils": 2,
+      "identity_cost": 0.5,
+      "mean_deviation": 1.044762867858592,
+      "std_deviation": 0.7577357260510328,
+      "mean_attacker_gain": 1.044762867858592,
+      "mean_attacker_profit": 0.044762867858592015,
+      "attack_profitable": 0.44
+    },
+    {
+      "mechanism": "quadratic",
+      "n_sybils": 2,
+      "identity_cost": 0.5,
+      "mean_deviation": 2.8322586129365472,
+      "std_deviation": 0.22394388797337136,
+      "mean_attacker_gain": 2.8322586129365472,
+      "mean_attacker_profit": 1.832258612936547,
+      "attack_profitable": 1.0
+    },
+    {
+      "mechanism": "conviction",
+      "n_sybils": 2,
+      "identity_cost": 0.5,
+      "mean_deviation": 0.0,
+      "std_deviation": 0.0,
+      "mean_attacker_gain": 0.0,
+      "mean_attacker_profit": -1.0,
+      "attack_profitable": 0.0
+    },
+    {
+      "mechanism": "1p1v",
+      "n_sybils": 2,
+      "identity_cost": 1.0,
+      "mean_deviation": 1.0295571405379491,
+      "std_deviation": 0.8259924431709137,
+      "mean_attacker_gain": 1.0295571405379491,
+      "mean_attacker_profit": -0.9704428594620509,
+      "attack_profitable": 0.08
+    },
+    {
+      "mechanism": "quadratic",
+      "n_sybils": 2,
+      "identity_cost": 1.0,
+      "mean_deviation": 2.8368293953866193,
+      "std_deviation": 0.1898312795207947,
+      "mean_attacker_gain": 2.8368293953866193,
+      "mean_attacker_profit": 0.8368293953866189,
+      "attack_profitable": 1.0
+    },
+    {
+      "mechanism": "conviction",
+      "n_sybils": 2,
+      "identity_cost": 1.0,
+      "mean_deviation": 5.0,
+      "std_deviation": 14.142135623730951,
+      "mean_attacker_gain": 5.0,
+      "mean_attacker_profit": 3.0,
+      "attack_profitable": 0.12
+    },
+    {
+      "mechanism": "1p1v",
+      "n_sybils": 2,
+      "identity_cost": 2.0,
+      "mean_deviation": 1.026109908638922,
+      "std_deviation": 0.5386002456092617,
+      "mean_attacker_gain": 1.026109908638922,
+      "mean_attacker_profit": -2.973890091361078,
+      "attack_profitable": 0.0
+    },
+    {
+      "mechanism": "quadratic",
+      "n_sybils": 2,
+      "identity_cost": 2.0,
+      "mean_deviation": 2.7975885460470864,
+      "std_deviation": 0.18492628064964736,
+      "mean_attacker_gain": 2.7975885460470864,
+      "mean_attacker_profit": -1.202411453952914,
+      "attack_profitable": 0.0
+    },
+    {
+      "mechanism": "conviction",
+      "n_sybils": 2,
+      "identity_cost": 2.0,
+      "mean_deviation": 3.5,
+      "std_deviation": 12.175795661885921,
+      "mean_attacker_gain": 3.5,
+      "mean_attacker_profit": -0.5,
+      "attack_profitable": 0.08
+    },
+    {
+      "mechanism": "1p1v",
+      "n_sybils": 2,
+      "identity_cost": 5.0,
+      "mean_deviation": 1.0179031272263455,
+      "std_deviation": 0.9043081180605664,
+      "mean_attacker_gain": 1.0179031272263455,
+      "mean_attacker_profit": -8.982096872773656,
+      "attack_profitable": 0.0
+    },
+    {
+      "mechanism": "quadratic",
+      "n_sybils": 2,
+      "identity_cost": 5.0,
+      "mean_deviation": 2.8259349367079754,
+      "std_deviation": 0.18897646431672843,
+      "mean_attacker_gain": 2.8259349367079754,
+      "mean_attacker_profit": -7.174065063292023,
+      "attack_profitable": 0.0
+    },
+    {
+      "mechanism": "conviction",
+      "n_sybils": 2,
+      "identity_cost": 5.0,
+      "mean_deviation": 0.9,
+      "std_deviation": 6.300000000000001,
+      "mean_attacker_gain": 0.9,
+      "mean_attacker_profit": -9.1,
+      "attack_profitable": 0.02
+    },
+    {
+      "mechanism": "1p1v",
+      "n_sybils": 2,
+      "identity_cost": 10.0,
+      "mean_deviation": 1.0815423847156707,
+      "std_deviation": 0.7198250100778987,
+      "mean_attacker_gain": 1.0815423847156707,
+      "mean_attacker_profit": -18.918457615284332,
+      "attack_profitable": 0.0
+    },
+    {
+      "mechanism": "quadratic",
+      "n_sybils": 2,
+      "identity_cost": 10.0,
+      "mean_deviation": 2.798263035292765,
+      "std_deviation": 0.18390798818482113,
+      "mean_attacker_gain": 2.798263035292765,
+      "mean_attacker_profit": -17.201736964707234,
+      "attack_profitable": 0.0
+    },
+    {
+      "mechanism": "conviction",
+      "n_sybils": 2,
+      "identity_cost": 10.0,
+      "mean_deviation": 0.7,
+      "std_deviation": 4.9,
+      "mean_attacker_gain": 0.7,
+      "mean_attacker_profit": -19.3,
+      "attack_profitable": 0.02
+    },
+    {
+      "mechanism": "1p1v",
+      "n_sybils": 5,
+      "identity_cost": 0.0,
+      "mean_deviation": 3.1935370761907147,
+      "std_deviation": 1.6366148741046511,
+      "mean_attacker_gain": 3.1935370761907147,
+      "mean_attacker_profit": 3.1935370761907147,
+      "attack_profitable": 1.0
+    },
+    {
+      "mechanism": "quadratic",
+      "n_sybils": 5,
+      "identity_cost": 0.0,
+      "mean_deviation": 5.24049418925691,
+      "std_deviation": 0.39125099689147425,
+      "mean_attacker_gain": 5.24049418925691,
+      "mean_attacker_profit": 5.24049418925691,
+      "attack_profitable": 1.0
+    },
+    {
+      "mechanism": "conviction",
+      "n_sybils": 5,
+      "identity_cost": 0.0,
+      "mean_deviation": 32.1,
+      "std_deviation": 17.35194513592064,
+      "mean_attacker_gain": 32.1,
+      "mean_attacker_profit": 32.1,
+      "attack_profitable": 0.8
+    },
+    {
+      "mechanism": "1p1v",
+      "n_sybils": 5,
+      "identity_cost": 0.1,
+      "mean_deviation": 2.3109738568155804,
+      "std_deviation": 1.4024973591442182,
+      "mean_attacker_gain": 2.3109738568155804,
+      "mean_attacker_profit": 1.8109738568155802,
+      "attack_profitable": 0.96
+    },
+    {
+      "mechanism": "quadratic",
+      "n_sybils": 5,
+      "identity_cost": 0.1,
+      "mean_deviation": 5.254961595205596,
+      "std_deviation": 0.4127434874012145,
+      "mean_attacker_gain": 5.254961595205596,
+      "mean_attacker_profit": 4.754961595205597,
+      "attack_profitable": 1.0
+    },
+    {
+      "mechanism": "conviction",
+      "n_sybils": 5,
+      "identity_cost": 0.1,
+      "mean_deviation": 29.3,
+      "std_deviation": 19.261619869574833,
+      "mean_attacker_gain": 29.3,
+      "mean_attacker_profit": 28.8,
+      "attack_profitable": 0.76
+    },
+    {
+      "mechanism": "1p1v",
+      "n_sybils": 5,
+      "identity_cost": 0.5,
+      "mean_deviation": 2.405192796673563,
+      "std_deviation": 1.4052817227474415,
+      "mean_attacker_gain": 2.405192796673563,
+      "mean_attacker_profit": -0.0948072033264367,
+      "attack_profitable": 0.36
+    },
+    {
+      "mechanism": "quadratic",
+      "n_sybils": 5,
+      "identity_cost": 0.5,
+      "mean_deviation": 5.241712943112232,
+      "std_deviation": 0.41240693620731894,
+      "mean_attacker_gain": 5.241712943112232,
+      "mean_attacker_profit": 2.7417129431122316,
+      "attack_profitable": 1.0
+    },
+    {
+      "mechanism": "conviction",
+      "n_sybils": 5,
+      "identity_cost": 0.5,
+      "mean_deviation": 28.9,
+      "std_deviation": 19.654261624390777,
+      "mean_attacker_gain": 28.9,
+      "mean_attacker_profit": 26.4,
+      "attack_profitable": 0.74
+    },
+    {
+      "mechanism": "1p1v",
+      "n_sybils": 5,
+      "identity_cost": 1.0,
+      "mean_deviation": 2.6651017882617545,
+      "std_deviation": 1.791990839115909,
+      "mean_attacker_gain": 2.6651017882617545,
+      "mean_attacker_profit": -2.3348982117382455,
+      "attack_profitable": 0.12
+    },
+    {
+      "mechanism": "quadratic",
+      "n_sybils": 5,
+      "identity_cost": 1.0,
+      "mean_deviation": 5.178163601212557,
+      "std_deviation": 0.41133959137801696,
+      "mean_attacker_gain": 5.178163601212557,
+      "mean_attacker_profit": 0.17816360121255725,
+      "attack_profitable": 0.64
+    },
+    {
+      "mechanism": "conviction",
+      "n_sybils": 5,
+      "identity_cost": 1.0,
+      "mean_deviation": 35.5,
+      "std_deviation": 17.327723451163457,
+      "mean_attacker_gain": 35.5,
+      "mean_attacker_profit": 30.5,
+      "attack_profitable": 0.84
+    },
+    {
+      "mechanism": "1p1v",
+      "n_sybils": 5,
+      "identity_cost": 2.0,
+      "mean_deviation": 3.014679326439287,
+      "std_deviation": 1.5559544216323626,
+      "mean_attacker_gain": 3.014679326439287,
+      "mean_attacker_profit": -6.985320673560714,
+      "attack_profitable": 0.0
+    },
+    {
+      "mechanism": "quadratic",
+      "n_sybils": 5,
+      "identity_cost": 2.0,
+      "mean_deviation": 5.2250286895461215,
+      "std_deviation": 0.3988109175869419,
+      "mean_attacker_gain": 5.2250286895461215,
+      "mean_attacker_profit": -4.7749713104538785,
+      "attack_profitable": 0.0
+    },
+    {
+      "mechanism": "conviction",
+      "n_sybils": 5,
+      "identity_cost": 2.0,
+      "mean_deviation": 36.0,
+      "std_deviation": 16.1245154965971,
+      "mean_attacker_gain": 36.0,
+      "mean_attacker_profit": 26.0,
+      "attack_profitable": 0.88
+    },
+    {
+      "mechanism": "1p1v",
+      "n_sybils": 5,
+      "identity_cost": 5.0,
+      "mean_deviation": 2.5884666343657137,
+      "std_deviation": 1.4493528748548417,
+      "mean_attacker_gain": 2.5884666343657137,
+      "mean_attacker_profit": -22.41153336563429,
+      "attack_profitable": 0.0
+    },
+    {
+      "mechanism": "quadratic",
+      "n_sybils": 5,
+      "identity_cost": 5.0,
+      "mean_deviation": 5.2253954304055465,
+      "std_deviation": 0.38838567001321656,
+      "mean_attacker_gain": 5.2253954304055465,
+      "mean_attacker_profit": -19.77460456959445,
+      "attack_profitable": 0.0
+    },
+    {
+      "mechanism": "conviction",
+      "n_sybils": 5,
+      "identity_cost": 5.0,
+      "mean_deviation": 32.7,
+      "std_deviation": 16.559287424282484,
+      "mean_attacker_gain": 32.7,
+      "mean_attacker_profit": 7.7,
+      "attack_profitable": 0.78
+    },
+    {
+      "mechanism": "1p1v",
+      "n_sybils": 5,
+      "identity_cost": 10.0,
+      "mean_deviation": 2.377377329948353,
+      "std_deviation": 1.0945348190690625,
+      "mean_attacker_gain": 2.377377329948353,
+      "mean_attacker_profit": -47.62262267005165,
+      "attack_profitable": 0.0
+    },
+    {
+      "mechanism": "quadratic",
+      "n_sybils": 5,
+      "identity_cost": 10.0,
+      "mean_deviation": 5.306179734136624,
+      "std_deviation": 0.40431161103583435,
+      "mean_attacker_gain": 5.306179734136624,
+      "mean_attacker_profit": -44.69382026586338,
+      "attack_profitable": 0.0
+    },
+    {
+      "mechanism": "conviction",
+      "n_sybils": 5,
+      "identity_cost": 10.0,
+      "mean_deviation": 31.8,
+      "std_deviation": 20.51243525279239,
+      "mean_attacker_gain": 31.8,
+      "mean_attacker_profit": -18.2,
+      "attack_profitable": 0.1
+    },
+    {
+      "mechanism": "1p1v",
+      "n_sybils": 10,
+      "identity_cost": 0.0,
+      "mean_deviation": 4.844399088124001,
+      "std_deviation": 1.6488838555280407,
+      "mean_attacker_gain": 4.844399088124001,
+      "mean_attacker_profit": 4.844399088124001,
+      "attack_profitable": 1.0
+    },
+    {
+      "mechanism": "quadratic",
+      "n_sybils": 10,
+      "identity_cost": 0.0,
+      "mean_deviation": 8.750038660985338,
+      "std_deviation": 0.6374569447006113,
+      "mean_attacker_gain": 8.750038660985338,
+      "mean_attacker_profit": 8.750038660985338,
+      "attack_profitable": 1.0
+    },
+    {
+      "mechanism": "conviction",
+      "n_sybils": 10,
+      "identity_cost": 0.0,
+      "mean_deviation": 41.8,
+      "std_deviation": 9.579144011862438,
+      "mean_attacker_gain": 41.8,
+      "mean_attacker_profit": 41.8,
+      "attack_profitable": 1.0
+    },
+    {
+      "mechanism": "1p1v",
+      "n_sybils": 10,
+      "identity_cost": 0.1,
+      "mean_deviation": 5.301761098108995,
+      "std_deviation": 1.8785297534024705,
+      "mean_attacker_gain": 5.301761098108995,
+      "mean_attacker_profit": 4.301761098108995,
+      "attack_profitable": 1.0
+    },
+    {
+      "mechanism": "quadratic",
+      "n_sybils": 10,
+      "identity_cost": 0.1,
+      "mean_deviation": 8.580323128518243,
+      "std_deviation": 0.6828375880005687,
+      "mean_attacker_gain": 8.580323128518243,
+      "mean_attacker_profit": 7.580323128518242,
+      "attack_profitable": 1.0
+    },
+    {
+      "mechanism": "conviction",
+      "n_sybils": 10,
+      "identity_cost": 0.1,
+      "mean_deviation": 39.4,
+      "std_deviation": 10.613199329137279,
+      "mean_attacker_gain": 39.4,
+      "mean_attacker_profit": 38.4,
+      "attack_profitable": 1.0
+    },
+    {
+      "mechanism": "1p1v",
+      "n_sybils": 10,
+      "identity_cost": 0.5,
+      "mean_deviation": 4.679383404407232,
+      "std_deviation": 1.5543609244914287,
+      "mean_attacker_gain": 4.679383404407232,
+      "mean_attacker_profit": -0.32061659559276917,
+      "attack_profitable": 0.34
+    },
+    {
+      "mechanism": "quadratic",
+      "n_sybils": 10,
+      "identity_cost": 0.5,
+      "mean_deviation": 8.503095206978628,
+      "std_deviation": 0.6156559009198341,
+      "mean_attacker_gain": 8.503095206978628,
+      "mean_attacker_profit": 3.5030952069786294,
+      "attack_profitable": 1.0
+    },
+    {
+      "mechanism": "conviction",
+      "n_sybils": 10,
+      "identity_cost": 0.5,
+      "mean_deviation": 39.2,
+      "std_deviation": 9.505787710652916,
+      "mean_attacker_gain": 39.2,
+      "mean_attacker_profit": 34.2,
+      "attack_profitable": 1.0
+    },
+    {
+      "mechanism": "1p1v",
+      "n_sybils": 10,
+      "identity_cost": 1.0,
+      "mean_deviation": 4.318321194209693,
+      "std_deviation": 1.2723619658832424,
+      "mean_attacker_gain": 4.318321194209693,
+      "mean_attacker_profit": -5.681678805790307,
+      "attack_profitable": 0.0
+    },
+    {
+      "mechanism": "quadratic",
+      "n_sybils": 10,
+      "identity_cost": 1.0,
+      "mean_deviation": 8.689364897935452,
+      "std_deviation": 0.6693565926647295,
+      "mean_attacker_gain": 8.689364897935452,
+      "mean_attacker_profit": -1.3106351020645461,
+      "attack_profitable": 0.02
+    },
+    {
+      "mechanism": "conviction",
+      "n_sybils": 10,
+      "identity_cost": 1.0,
+      "mean_deviation": 43.5,
+      "std_deviation": 10.012492197250394,
+      "mean_attacker_gain": 43.5,
+      "mean_attacker_profit": 33.5,
+      "attack_profitable": 1.0
+    },
+    {
+      "mechanism": "1p1v",
+      "n_sybils": 10,
+      "identity_cost": 2.0,
+      "mean_deviation": 5.376106794053075,
+      "std_deviation": 2.2009899272248594,
+      "mean_attacker_gain": 5.376106794053075,
+      "mean_attacker_profit": -14.623893205946924,
+      "attack_profitable": 0.0
+    },
+    {
+      "mechanism": "quadratic",
+      "n_sybils": 10,
+      "identity_cost": 2.0,
+      "mean_deviation": 8.579325049412482,
+      "std_deviation": 0.6327474145786021,
+      "mean_attacker_gain": 8.579325049412482,
+      "mean_attacker_profit": -11.420674950587518,
+      "attack_profitable": 0.0
+    },
+    {
+      "mechanism": "conviction",
+      "n_sybils": 10,
+      "identity_cost": 2.0,
+      "mean_deviation": 41.9,
+      "std_deviation": 10.241581909060727,
+      "mean_attacker_gain": 41.9,
+      "mean_attacker_profit": 21.9,
+      "attack_profitable": 0.96
+    },
+    {
+      "mechanism": "1p1v",
+      "n_sybils": 10,
+      "identity_cost": 5.0,
+      "mean_deviation": 5.749671977082347,
+      "std_deviation": 2.633709208329003,
+      "mean_attacker_gain": 5.749671977082347,
+      "mean_attacker_profit": -44.25032802291766,
+      "attack_profitable": 0.0
+    },
+    {
+      "mechanism": "quadratic",
+      "n_sybils": 10,
+      "identity_cost": 5.0,
+      "mean_deviation": 8.678895874719393,
+      "std_deviation": 0.5942015057259541,
+      "mean_attacker_gain": 8.678895874719393,
+      "mean_attacker_profit": -41.321104125280606,
+      "attack_profitable": 0.0
+    },
+    {
+      "mechanism": "conviction",
+      "n_sybils": 10,
+      "identity_cost": 5.0,
+      "mean_deviation": 37.7,
+      "std_deviation": 12.09173271289107,
+      "mean_attacker_gain": 37.7,
+      "mean_attacker_profit": -12.3,
+      "attack_profitable": 0.12
+    },
+    {
+      "mechanism": "1p1v",
+      "n_sybils": 10,
+      "identity_cost": 10.0,
+      "mean_deviation": 5.0729484525167745,
+      "std_deviation": 2.439472354836768,
+      "mean_attacker_gain": 5.0729484525167745,
+      "mean_attacker_profit": -94.92705154748323,
+      "attack_profitable": 0.0
+    },
+    {
+      "mechanism": "quadratic",
+      "n_sybils": 10,
+      "identity_cost": 10.0,
+      "mean_deviation": 8.595140890377204,
+      "std_deviation": 0.6355943909981514,
+      "mean_attacker_gain": 8.595140890377204,
+      "mean_attacker_profit": -91.40485910962279,
+      "attack_profitable": 0.0
+    },
+    {
+      "mechanism": "conviction",
+      "n_sybils": 10,
+      "identity_cost": 10.0,
+      "mean_deviation": 39.7,
+      "std_deviation": 8.74128137060008,
+      "mean_attacker_gain": 39.7,
+      "mean_attacker_profit": -60.3,
+      "attack_profitable": 0.0
+    },
+    {
+      "mechanism": "1p1v",
+      "n_sybils": 20,
+      "identity_cost": 0.0,
+      "mean_deviation": 10.674286104432449,
+      "std_deviation": 3.3873376216986175,
+      "mean_attacker_gain": 10.674286104432449,
+      "mean_attacker_profit": 10.674286104432449,
+      "attack_profitable": 1.0
+    },
+    {
+      "mechanism": "quadratic",
+      "n_sybils": 20,
+      "identity_cost": 0.0,
+      "mean_deviation": 13.905271227176884,
+      "std_deviation": 0.9729878640571638,
+      "mean_attacker_gain": 13.905271227176884,
+      "mean_attacker_profit": 13.905271227176884,
+      "attack_profitable": 1.0
+    },
+    {
+      "mechanism": "conviction",
+      "n_sybils": 20,
+      "identity_cost": 0.0,
+      "mean_deviation": 38.7,
+      "std_deviation": 8.649277426467485,
+      "mean_attacker_gain": 38.7,
+      "mean_attacker_profit": 38.7,
+      "attack_profitable": 1.0
+    },
+    {
+      "mechanism": "1p1v",
+      "n_sybils": 20,
+      "identity_cost": 0.1,
+      "mean_deviation": 10.698956803577348,
+      "std_deviation": 2.6340110328652333,
+      "mean_attacker_gain": 10.698956803577348,
+      "mean_attacker_profit": 8.698956803577348,
+      "attack_profitable": 1.0
+    },
+    {
+      "mechanism": "quadratic",
+      "n_sybils": 20,
+      "identity_cost": 0.1,
+      "mean_deviation": 13.666028810174662,
+      "std_deviation": 0.6996727990240433,
+      "mean_attacker_gain": 13.666028810174662,
+      "mean_attacker_profit": 11.666028810174662,
+      "attack_profitable": 1.0
+    },
+    {
+      "mechanism": "conviction",
+      "n_sybils": 20,
+      "identity_cost": 0.1,
+      "mean_deviation": 38.4,
+      "std_deviation": 9.614572273377533,
+      "mean_attacker_gain": 38.4,
+      "mean_attacker_profit": 36.4,
+      "attack_profitable": 1.0
+    },
+    {
+      "mechanism": "1p1v",
+      "n_sybils": 20,
+      "identity_cost": 0.5,
+      "mean_deviation": 10.392560768265557,
+      "std_deviation": 2.985667918605978,
+      "mean_attacker_gain": 10.392560768265557,
+      "mean_attacker_profit": 0.3925607682655587,
+      "attack_profitable": 0.44
+    },
+    {
+      "mechanism": "quadratic",
+      "n_sybils": 20,
+      "identity_cost": 0.5,
+      "mean_deviation": 13.87664152573904,
+      "std_deviation": 0.8881688718446062,
+      "mean_attacker_gain": 13.87664152573904,
+      "mean_attacker_profit": 3.87664152573904,
+      "attack_profitable": 1.0
+    },
+    {
+      "mechanism": "conviction",
+      "n_sybils": 20,
+      "identity_cost": 0.5,
+      "mean_deviation": 39.6,
+      "std_deviation": 9.941830817309254,
+      "mean_attacker_gain": 39.6,
+      "mean_attacker_profit": 29.6,
+      "attack_profitable": 1.0
+    },
+    {
+      "mechanism": "1p1v",
+      "n_sybils": 20,
+      "identity_cost": 1.0,
+      "mean_deviation": 11.033187984808501,
+      "std_deviation": 2.907268242067827,
+      "mean_attacker_gain": 11.033187984808501,
+      "mean_attacker_profit": -8.966812015191499,
+      "attack_profitable": 0.0
+    },
+    {
+      "mechanism": "quadratic",
+      "n_sybils": 20,
+      "identity_cost": 1.0,
+      "mean_deviation": 14.118881987980883,
+      "std_deviation": 0.9348028765733399,
+      "mean_attacker_gain": 14.118881987980883,
+      "mean_attacker_profit": -5.881118012019117,
+      "attack_profitable": 0.0
+    },
+    {
+      "mechanism": "conviction",
+      "n_sybils": 20,
+      "identity_cost": 1.0,
+      "mean_deviation": 39.1,
+      "std_deviation": 7.98060148109151,
+      "mean_attacker_gain": 39.1,
+      "mean_attacker_profit": 19.1,
+      "attack_profitable": 0.98
+    },
+    {
+      "mechanism": "1p1v",
+      "n_sybils": 20,
+      "identity_cost": 2.0,
+      "mean_deviation": 10.817860937518297,
+      "std_deviation": 2.965189408074887,
+      "mean_attacker_gain": 10.817860937518297,
+      "mean_attacker_profit": -29.182139062481706,
+      "attack_profitable": 0.0
+    },
+    {
+      "mechanism": "quadratic",
+      "n_sybils": 20,
+      "identity_cost": 2.0,
+      "mean_deviation": 13.811602284086302,
+      "std_deviation": 0.8671434377032958,
+      "mean_attacker_gain": 13.811602284086302,
+      "mean_attacker_profit": -26.1883977159137,
+      "attack_profitable": 0.0
+    },
+    {
+      "mechanism": "conviction",
+      "n_sybils": 20,
+      "identity_cost": 2.0,
+      "mean_deviation": 38.5,
+      "std_deviation": 10.781929326423912,
+      "mean_attacker_gain": 38.5,
+      "mean_attacker_profit": -1.5,
+      "attack_profitable": 0.34
+    },
+    {
+      "mechanism": "1p1v",
+      "n_sybils": 20,
+      "identity_cost": 5.0,
+      "mean_deviation": 10.242935659400848,
+      "std_deviation": 2.603279385308754,
+      "mean_attacker_gain": 10.242935659400848,
+      "mean_attacker_profit": -89.75706434059916,
+      "attack_profitable": 0.0
+    },
+    {
+      "mechanism": "quadratic",
+      "n_sybils": 20,
+      "identity_cost": 5.0,
+      "mean_deviation": 13.802040881708404,
+      "std_deviation": 0.9581851406718674,
+      "mean_attacker_gain": 13.802040881708404,
+      "mean_attacker_profit": -86.1979591182916,
+      "attack_profitable": 0.0
+    },
+    {
+      "mechanism": "conviction",
+      "n_sybils": 20,
+      "identity_cost": 5.0,
+      "mean_deviation": 38.6,
+      "std_deviation": 10.00199980003999,
+      "mean_attacker_gain": 38.6,
+      "mean_attacker_profit": -61.4,
+      "attack_profitable": 0.0
+    },
+    {
+      "mechanism": "1p1v",
+      "n_sybils": 20,
+      "identity_cost": 10.0,
+      "mean_deviation": 10.333189027137742,
+      "std_deviation": 2.817237052100933,
+      "mean_attacker_gain": 10.333189027137742,
+      "mean_attacker_profit": -189.66681097286227,
+      "attack_profitable": 0.0
+    },
+    {
+      "mechanism": "quadratic",
+      "n_sybils": 20,
+      "identity_cost": 10.0,
+      "mean_deviation": 14.023594136457199,
+      "std_deviation": 0.9709000343398165,
+      "mean_attacker_gain": 14.023594136457199,
+      "mean_attacker_profit": -185.9764058635428,
+      "attack_profitable": 0.0
+    },
+    {
+      "mechanism": "conviction",
+      "n_sybils": 20,
+      "identity_cost": 10.0,
+      "mean_deviation": 39.4,
+      "std_deviation": 9.572878355019455,
+      "mean_attacker_gain": 39.4,
+      "mean_attacker_profit": -160.6,
+      "attack_profitable": 0.0
+    },
+    {
+      "mechanism": "1p1v",
+      "n_sybils": 50,
+      "identity_cost": 0.0,
+      "mean_deviation": 38.412791023051895,
+      "std_deviation": 2.865514030227991,
+      "mean_attacker_gain": 38.412791023051895,
+      "mean_attacker_profit": 38.412791023051895,
+      "attack_profitable": 1.0
+    },
+    {
+      "mechanism": "quadratic",
+      "n_sybils": 50,
+      "identity_cost": 0.0,
+      "mean_deviation": 22.400427004054976,
+      "std_deviation": 1.720118599040597,
+      "mean_attacker_gain": 22.400427004054976,
+      "mean_attacker_profit": 22.400427004054976,
+      "attack_profitable": 1.0
+    },
+    {
+      "mechanism": "conviction",
+      "n_sybils": 50,
+      "identity_cost": 0.0,
+      "mean_deviation": 41.0,
+      "std_deviation": 9.9498743710662,
+      "mean_attacker_gain": 41.0,
+      "mean_attacker_profit": 41.0,
+      "attack_profitable": 1.0
+    },
+    {
+      "mechanism": "1p1v",
+      "n_sybils": 50,
+      "identity_cost": 0.1,
+      "mean_deviation": 39.53308192398598,
+      "std_deviation": 3.5061093375475214,
+      "mean_attacker_gain": 39.53308192398598,
+      "mean_attacker_profit": 34.53308192398598,
+      "attack_profitable": 1.0
+    },
+    {
+      "mechanism": "quadratic",
+      "n_sybils": 50,
+      "identity_cost": 0.1,
+      "mean_deviation": 22.233256193950194,
+      "std_deviation": 1.7769734269220343,
+      "mean_attacker_gain": 22.233256193950194,
+      "mean_attacker_profit": 17.233256193950186,
+      "attack_profitable": 1.0
+    },
+    {
+      "mechanism": "conviction",
+      "n_sybils": 50,
+      "identity_cost": 0.1,
+      "mean_deviation": 41.4,
+      "std_deviation": 9.38296328459192,
+      "mean_attacker_gain": 41.4,
+      "mean_attacker_profit": 36.4,
+      "attack_profitable": 1.0
+    },
+    {
+      "mechanism": "1p1v",
+      "n_sybils": 50,
+      "identity_cost": 0.5,
+      "mean_deviation": 38.52359502472301,
+      "std_deviation": 3.3513618779274026,
+      "mean_attacker_gain": 38.52359502472301,
+      "mean_attacker_profit": 13.523595024723004,
+      "attack_profitable": 1.0
+    },
+    {
+      "mechanism": "quadratic",
+      "n_sybils": 50,
+      "identity_cost": 0.5,
+      "mean_deviation": 22.655093790777787,
+      "std_deviation": 1.6409389352127415,
+      "mean_attacker_gain": 22.655093790777787,
+      "mean_attacker_profit": -2.344906209222217,
+      "attack_profitable": 0.06
+    },
+    {
+      "mechanism": "conviction",
+      "n_sybils": 50,
+      "identity_cost": 0.5,
+      "mean_deviation": 40.3,
+      "std_deviation": 10.169070754006976,
+      "mean_attacker_gain": 40.3,
+      "mean_attacker_profit": 15.3,
+      "attack_profitable": 0.88
+    },
+    {
+      "mechanism": "1p1v",
+      "n_sybils": 50,
+      "identity_cost": 1.0,
+      "mean_deviation": 38.55437589258951,
+      "std_deviation": 3.920387571823592,
+      "mean_attacker_gain": 38.55437589258951,
+      "mean_attacker_profit": -11.445624107410486,
+      "attack_profitable": 0.0
+    },
+    {
+      "mechanism": "quadratic",
+      "n_sybils": 50,
+      "identity_cost": 1.0,
+      "mean_deviation": 22.244913444416103,
+      "std_deviation": 1.779756733243239,
+      "mean_attacker_gain": 22.244913444416103,
+      "mean_attacker_profit": -27.755086555583897,
+      "attack_profitable": 0.0
+    },
+    {
+      "mechanism": "conviction",
+      "n_sybils": 50,
+      "identity_cost": 1.0,
+      "mean_deviation": 42.5,
+      "std_deviation": 8.616843969807043,
+      "mean_attacker_gain": 42.5,
+      "mean_attacker_profit": -7.5,
+      "attack_profitable": 0.14
+    },
+    {
+      "mechanism": "1p1v",
+      "n_sybils": 50,
+      "identity_cost": 2.0,
+      "mean_deviation": 38.5638130533437,
+      "std_deviation": 3.443001200312143,
+      "mean_attacker_gain": 38.5638130533437,
+      "mean_attacker_profit": -61.43618694665629,
+      "attack_profitable": 0.0
+    },
+    {
+      "mechanism": "quadratic",
+      "n_sybils": 50,
+      "identity_cost": 2.0,
+      "mean_deviation": 22.489859521348972,
+      "std_deviation": 1.711903729702023,
+      "mean_attacker_gain": 22.489859521348972,
+      "mean_attacker_profit": -77.51014047865102,
+      "attack_profitable": 0.0
+    },
+    {
+      "mechanism": "conviction",
+      "n_sybils": 50,
+      "identity_cost": 2.0,
+      "mean_deviation": 37.3,
+      "std_deviation": 9.960421677820673,
+      "mean_attacker_gain": 37.3,
+      "mean_attacker_profit": -62.7,
+      "attack_profitable": 0.0
+    },
+    {
+      "mechanism": "1p1v",
+      "n_sybils": 50,
+      "identity_cost": 5.0,
+      "mean_deviation": 39.10622972951771,
+      "std_deviation": 3.346077032248455,
+      "mean_attacker_gain": 39.10622972951771,
+      "mean_attacker_profit": -210.89377027048226,
+      "attack_profitable": 0.0
+    },
+    {
+      "mechanism": "quadratic",
+      "n_sybils": 50,
+      "identity_cost": 5.0,
+      "mean_deviation": 22.792775778794358,
+      "std_deviation": 1.7997369752731809,
+      "mean_attacker_gain": 22.792775778794358,
+      "mean_attacker_profit": -227.20722422120565,
+      "attack_profitable": 0.0
+    },
+    {
+      "mechanism": "conviction",
+      "n_sybils": 50,
+      "identity_cost": 5.0,
+      "mean_deviation": 40.7,
+      "std_deviation": 10.630616162763097,
+      "mean_attacker_gain": 40.7,
+      "mean_attacker_profit": -209.3,
+      "attack_profitable": 0.0
+    },
+    {
+      "mechanism": "1p1v",
+      "n_sybils": 50,
+      "identity_cost": 10.0,
+      "mean_deviation": 39.587064457906095,
+      "std_deviation": 3.433299965222223,
+      "mean_attacker_gain": 39.587064457906095,
+      "mean_attacker_profit": -460.41293554209386,
+      "attack_profitable": 0.0
+    },
+    {
+      "mechanism": "quadratic",
+      "n_sybils": 50,
+      "identity_cost": 10.0,
+      "mean_deviation": 22.092543673208667,
+      "std_deviation": 1.3051943787090012,
+      "mean_attacker_gain": 22.092543673208667,
+      "mean_attacker_profit": -477.90745632679136,
+      "attack_profitable": 0.0
+    },
+    {
+      "mechanism": "conviction",
+      "n_sybils": 50,
+      "identity_cost": 10.0,
+      "mean_deviation": 40.5,
+      "std_deviation": 12.216791722870616,
+      "mean_attacker_gain": 40.5,
+      "mean_attacker_profit": -459.5,
+      "attack_profitable": 0.0
+    },
+    {
+      "mechanism": "1p1v",
+      "n_sybils": 100,
+      "identity_cost": 0.0,
+      "mean_deviation": 40.01836082272735,
+      "std_deviation": 3.3279585025129914,
+      "mean_attacker_gain": 40.01836082272735,
+      "mean_attacker_profit": 40.01836082272735,
+      "attack_profitable": 1.0
+    },
+    {
+      "mechanism": "quadratic",
+      "n_sybils": 100,
+      "identity_cost": 0.0,
+      "mean_deviation": 28.391561304179717,
+      "std_deviation": 1.9121062073480632,
+      "mean_attacker_gain": 28.391561304179717,
+      "mean_attacker_profit": 28.391561304179717,
+      "attack_profitable": 1.0
+    },
+    {
+      "mechanism": "conviction",
+      "n_sybils": 100,
+      "identity_cost": 0.0,
+      "mean_deviation": 40.4,
+      "std_deviation": 10.85541339608953,
+      "mean_attacker_gain": 40.4,
+      "mean_attacker_profit": 40.4,
+      "attack_profitable": 1.0
+    },
+    {
+      "mechanism": "1p1v",
+      "n_sybils": 100,
+      "identity_cost": 0.1,
+      "mean_deviation": 39.82146456336715,
+      "std_deviation": 4.185330935514002,
+      "mean_attacker_gain": 39.82146456336715,
+      "mean_attacker_profit": 29.821464563367147,
+      "attack_profitable": 1.0
+    },
+    {
+      "mechanism": "quadratic",
+      "n_sybils": 100,
+      "identity_cost": 0.1,
+      "mean_deviation": 28.483809144686358,
+      "std_deviation": 1.9172837113844068,
+      "mean_attacker_gain": 28.483809144686358,
+      "mean_attacker_profit": 18.483809144686358,
+      "attack_profitable": 1.0
+    },
+    {
+      "mechanism": "conviction",
+      "n_sybils": 100,
+      "identity_cost": 0.1,
+      "mean_deviation": 35.1,
+      "std_deviation": 11.157508682497182,
+      "mean_attacker_gain": 35.1,
+      "mean_attacker_profit": 25.1,
+      "attack_profitable": 1.0
+    },
+    {
+      "mechanism": "1p1v",
+      "n_sybils": 100,
+      "identity_cost": 0.5,
+      "mean_deviation": 40.695848006772515,
+      "std_deviation": 3.467671231990149,
+      "mean_attacker_gain": 40.695848006772515,
+      "mean_attacker_profit": -9.304151993227483,
+      "attack_profitable": 0.0
+    },
+    {
+      "mechanism": "quadratic",
+      "n_sybils": 100,
+      "identity_cost": 0.5,
+      "mean_deviation": 28.867684804659564,
+      "std_deviation": 1.8137494480839025,
+      "mean_attacker_gain": 28.867684804659564,
+      "mean_attacker_profit": -21.13231519534043,
+      "attack_profitable": 0.0
+    },
+    {
+      "mechanism": "conviction",
+      "n_sybils": 100,
+      "identity_cost": 0.5,
+      "mean_deviation": 36.4,
+      "std_deviation": 9.275774900244183,
+      "mean_attacker_gain": 36.4,
+      "mean_attacker_profit": -13.6,
+      "attack_profitable": 0.02
+    },
+    {
+      "mechanism": "1p1v",
+      "n_sybils": 100,
+      "identity_cost": 1.0,
+      "mean_deviation": 40.022882611473875,
+      "std_deviation": 3.8517425424663045,
+      "mean_attacker_gain": 40.022882611473875,
+      "mean_attacker_profit": -59.977117388526125,
+      "attack_profitable": 0.0
+    },
+    {
+      "mechanism": "quadratic",
+      "n_sybils": 100,
+      "identity_cost": 1.0,
+      "mean_deviation": 28.778238439991288,
+      "std_deviation": 1.9732782049932531,
+      "mean_attacker_gain": 28.778238439991288,
+      "mean_attacker_profit": -71.22176156000872,
+      "attack_profitable": 0.0
+    },
+    {
+      "mechanism": "conviction",
+      "n_sybils": 100,
+      "identity_cost": 1.0,
+      "mean_deviation": 39.1,
+      "std_deviation": 8.7,
+      "mean_attacker_gain": 39.1,
+      "mean_attacker_profit": -60.9,
+      "attack_profitable": 0.0
+    },
+    {
+      "mechanism": "1p1v",
+      "n_sybils": 100,
+      "identity_cost": 2.0,
+      "mean_deviation": 39.19460315423874,
+      "std_deviation": 3.2795547630628583,
+      "mean_attacker_gain": 39.19460315423874,
+      "mean_attacker_profit": -160.80539684576127,
+      "attack_profitable": 0.0
+    },
+    {
+      "mechanism": "quadratic",
+      "n_sybils": 100,
+      "identity_cost": 2.0,
+      "mean_deviation": 28.4262110659992,
+      "std_deviation": 1.7178840121222554,
+      "mean_attacker_gain": 28.4262110659992,
+      "mean_attacker_profit": -171.57378893400085,
+      "attack_profitable": 0.0
+    },
+    {
+      "mechanism": "conviction",
+      "n_sybils": 100,
+      "identity_cost": 2.0,
+      "mean_deviation": 41.2,
+      "std_deviation": 11.382442620105756,
+      "mean_attacker_gain": 41.2,
+      "mean_attacker_profit": -158.8,
+      "attack_profitable": 0.0
+    },
+    {
+      "mechanism": "1p1v",
+      "n_sybils": 100,
+      "identity_cost": 5.0,
+      "mean_deviation": 40.04869338067256,
+      "std_deviation": 3.86957594305029,
+      "mean_attacker_gain": 40.04869338067256,
+      "mean_attacker_profit": -459.9513066193274,
+      "attack_profitable": 0.0
+    },
+    {
+      "mechanism": "quadratic",
+      "n_sybils": 100,
+      "identity_cost": 5.0,
+      "mean_deviation": 28.6804479221665,
+      "std_deviation": 1.7435079464032346,
+      "mean_attacker_gain": 28.6804479221665,
+      "mean_attacker_profit": -471.3195520778335,
+      "attack_profitable": 0.0
+    },
+    {
+      "mechanism": "conviction",
+      "n_sybils": 100,
+      "identity_cost": 5.0,
+      "mean_deviation": 42.1,
+      "std_deviation": 9.438749917229504,
+      "mean_attacker_gain": 42.1,
+      "mean_attacker_profit": -457.9,
+      "attack_profitable": 0.0
+    },
+    {
+      "mechanism": "1p1v",
+      "n_sybils": 100,
+      "identity_cost": 10.0,
+      "mean_deviation": 39.132339646574835,
+      "std_deviation": 3.196717600939797,
+      "mean_attacker_gain": 39.132339646574835,
+      "mean_attacker_profit": -960.8676603534252,
+      "attack_profitable": 0.0
+    },
+    {
+      "mechanism": "quadratic",
+      "n_sybils": 100,
+      "identity_cost": 10.0,
+      "mean_deviation": 28.704189710376703,
+      "std_deviation": 2.0508595710556268,
+      "mean_attacker_gain": 28.704189710376703,
+      "mean_attacker_profit": -971.2958102896233,
+      "attack_profitable": 0.0
+    },
+    {
+      "mechanism": "conviction",
+      "n_sybils": 100,
+      "identity_cost": 10.0,
+      "mean_deviation": 40.2,
+      "std_deviation": 10.146920715172657,
+      "mean_attacker_gain": 40.2,
+      "mean_attacker_profit": -959.8,
+      "attack_profitable": 0.0
+    }
+  ]
+}
